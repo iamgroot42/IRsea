@@ -1,4 +1,4 @@
-# IRC
+# IR-sea
 A chatting application, designed along the lines of IRC. Made as a course assignment for Network Security (CSE550).
 The following commands are supported (once logged in):
 
@@ -9,5 +9,3 @@ The following commands are supported (once logged in):
 * /send : send a file to another user
 * /msg_group : broadcast a message to an entire group
 * /recv : receive file being sent by someone
-* /help : list all these commands, along with their usage
-
