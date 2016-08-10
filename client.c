@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <arpa/inet.h> 
 
-#define PORT 5555
+#define PORT 5004
 
 int main(int argc, char *argv[])
 {
@@ -57,7 +57,6 @@ int main(int argc, char *argv[])
             perror("ERROR writing to server");
             exit(1);
         }
-
         int readbytes = 0;
         char recvBuff[256];
         memset(recvBuff, '0',sizeof(recvBuff));

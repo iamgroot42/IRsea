@@ -9,19 +9,18 @@
 #define REGISTER_PORT 5004
 #define IRC_PORT 5005
 
+using namespace std;
+
 // 3 queues for : p2p messages, groups, file sharing
 // 2 threads per queue (one for clearing queue, one for populating it)
 // Mapping between usernames and their file-descriptors
 // Note: queue for group would be of a vector, not int
-
-using namespace std;
-
 map<string,int> name_id;
 map<string, string> username_password; //Mapping of username-password (chached in memory); present in file
 queue< pair<int, string> > chat;
 
 
-void register_user()
+void* register_user(void* argv)
 {
     char buffer[256];
     int listenfd = 0, connfd = 0, ohho = 0;
@@ -35,20 +34,26 @@ void register_user()
     listen(listenfd, 5);
     while(1)
     {
+        cout<<"listening\n";
         connfd = accept(listenfd, (struct sockaddr*)NULL, NULL); 
         if(connfd >= 0)
         {
+            cout<<"Incoming! :D"<<endl;
             char *pch;
             memset(buffer,'0',sizeof(buffer));
             ohho = read(connfd,buffer,sizeof(buffer));
             buffer[ohho] = 0; //End string
             // Split buffer into username and password
             pch = strtok(buffer," ");
-            string username(pch);
+            // string username(pch);
+            // cout<<username<<endl;
+            cout<<pch<<endl;
             pch = strtok (NULL, " ");
-            string password(pch);
+            // string password(pch);
+            cout<<pch<<endl;
+            // cout<<password<<endl;
             // Store in cache
-            username_password.push(make_pair(username,password));
+            // username_password.push(make_pair(username,password));
         }
     } 
 }
@@ -65,7 +70,7 @@ void proc_chat_send()
             char reply[256];
             memset(sendBuff, '0', sizeof(sendBuff)); 
             file_dee = chat.front().first;
-            reply = chat.front().second;
+            // reply = chat.front().second;
             chat.pop();
             fgets(reply, sizeof(reply), stdin);
             // getline(cin, reply); // Replaces above
@@ -87,11 +92,39 @@ void proc_chat_receive(int connfd)
     chat.push(make_pair(connfd,buffer));
 }
 
-
 int main()
 {
     // Create threads for : user registration, receive messages, send messages
     // pthread_t pot;
-    // pthread_create(&pot, NULL, checker, NULL);
+    // pthread_create(&pot, NULL, register_user, NULL);
+    register_user(NULL);
+    return 0;
+
+    char buffer[256];
+    int listenfd = 0, connfd = 0, ohho = 0;
+    sockaddr_in serv_addr; 
+    listenfd = socket(AF_INET, SOCK_STREAM, 0);
+    memset(&serv_addr, '0', sizeof(serv_addr)); 
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_port = htons(IRC_PORT); 
+    bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)); 
+    listen(listenfd, 15);
+    while(1)
+    {
+        connfd = accept(listenfd, (struct sockaddr*)NULL, NULL); 
+        if(connfd >= 0)
+        {
+            cout<<"Incoming! :D"<<endl;
+            char *pch;
+            memset(buffer,'0',sizeof(buffer));
+            ohho = read(connfd,buffer,sizeof(buffer));
+            buffer[ohho] = 0; //End string
+            // Extract command type from incoming data
+            pch = strtok(buffer," ");
+            // switch-case on pch, pass it on to respective functions for managing
+            // pch = strtok (NULL, " ");
+        }
+    } 
     return 0;
 }
