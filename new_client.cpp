@@ -15,12 +15,10 @@
 
 using namespace std;
 
-
-int register_user(string username, string password)
+int send_data(string data, int port)
 {
-	int sock = 0;
-	struct sockaddr_in serv_addr; 
-	string combined;
+	int ohho = 0,sock = 0;
+	struct sockaddr_in serv_addr;
 	if((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         cerr<<"Socket creation error \n";
@@ -28,7 +26,7 @@ int register_user(string username, string password)
     } 
 	memset(&serv_addr, '0', sizeof(serv_addr)); 
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(REGISTER_PORT); 
+    serv_addr.sin_port = htons(port); 
     if(inet_pton(AF_INET, SERVER_IP, &serv_addr.sin_addr)<=0)
     {
         cerr<<"Invalid address\n";
@@ -39,8 +37,7 @@ int register_user(string username, string password)
         cerr<<"Connection Failed\n";
         return 0;
     }
-    string command = username + " " + password;
-    const char* commy = command.c_str();
+    const char* commy = data.c_str();
     if( (write(sock, commy, strlen(commy)) < 0) )
     {
         return 0;
@@ -48,11 +45,43 @@ int register_user(string username, string password)
     return 1;
 }
 
+void* server_feedback(void* void_port)
+{
+	long port = (long)void_port;
+	char buffer[256];
+    int listenfd = 0, connfd = 0, ohho = 0;
+    sockaddr_in serv_addr; 
+    listenfd = socket(AF_INET, SOCK_STREAM, 0);
+    memset(&serv_addr, '0', sizeof(serv_addr)); 
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_port = htons(port); 
+    bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)); 
+    listen(listenfd, 15);
+    while(1)
+    {
+        connfd = accept(listenfd, (struct sockaddr*)NULL, NULL); 
+        if(connfd >= 0)
+        {
+            char *pch;
+            memset(buffer,'0',sizeof(buffer));
+            ohho = read(connfd,buffer,sizeof(buffer));
+            buffer[ohho] = 0;
+            cout<<">> "<<buffer<<endl;
+        }
+    }
+}
+
+
 int main(int argc, char *argv[])
 {
-	string message, receipent, username, password, command;
+	pthread_t pot;
+	int port = IRC_PORT;
+    pthread_create(&pot, NULL, server_feedback, (void*)port);
+
+	string send, message, receipent, username, password, command;
 	int logged_in = 0;
-	cout<<"Welcome to IR-sea!\n";
+	cout<<"Welcome to IRsea!\n";
 	while(1)
 	{
 		cin>>command;
@@ -72,23 +101,33 @@ int main(int argc, char *argv[])
 		{
 			cin>>username;
 			cin>>password;
-			if(register_user(username, password))
+			send = username + " " + password;
+			if(!send_data(send, REGISTER_PORT))
 			{
-				cout<<"Registered successfully! You may now log in\n";
-			}
-			else
-			{
-				cout<<"Error in registration. Please try again.";
+				cout<<"Error in registration. Please try again.\n";
 			}
 		}
 		else if(!command.compare("/login"))
 		{	
 			cin>>username;
 			cin>>password;
-			// Authenticate user. If not registered, ask to. If invalid, throw error.
+			send = "/login " + username + " " + password;
+			if(!send_data(send, IRC_PORT))
+			{
+				cout<<"Error logging-in. Please try again.\n";
+			}
+			else
+			{
+				logged_in = 1;
+			}
 		}
 		else if(!command.compare("/who") && logged_in)
 		{
+			send = "/who " + username + " " + password;
+			if(!send_data(send, IRC_PORT))
+			{
+				cout<<"Error communicating with server. Please try again.\n";
+			}
 			// Request server for list of people online
 		}
 		else if(!command.compare("/msg") && logged_in)

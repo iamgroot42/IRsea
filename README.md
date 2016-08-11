@@ -1,4 +1,4 @@
-# IR-sea
+# IRsea
 A chatting application, designed along the lines of IRC. Made as a course assignment for Network Security (CSE550).
 The following commands are supported (once logged in):
 

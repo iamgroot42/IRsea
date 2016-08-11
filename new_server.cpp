@@ -12,10 +12,10 @@
 using namespace std;
 
 // 3 queues for : p2p messages, groups, file sharing
-// 2 threads per queue (one for clearing queue, one for populating it)
+// One threads per queue (to clear it)
 // Mapping between usernames and their file-descriptors
-// Note: queue for group would be of a vector, not int
 map<string,int> name_id;
+// Note: queue for group would be of a vector, not int
 map<string, string> username_password; //Mapping of username-password (chached in memory); present in file
 queue< pair<int, string> > chat;
 
@@ -34,71 +34,47 @@ void* register_user(void* argv)
     listen(listenfd, 5);
     while(1)
     {
-        cout<<"listening\n";
         connfd = accept(listenfd, (struct sockaddr*)NULL, NULL); 
         if(connfd >= 0)
         {
-            cout<<"Incoming! :D"<<endl;
             char *pch;
             memset(buffer,'0',sizeof(buffer));
             ohho = read(connfd,buffer,sizeof(buffer));
-            buffer[ohho] = 0; //End string
-            // Split buffer into username and password
+            buffer[ohho] = 0;
             pch = strtok(buffer," ");
-            // string username(pch);
-            // cout<<username<<endl;
-            cout<<pch<<endl;
+            string username(pch);
             pch = strtok (NULL, " ");
-            // string password(pch);
-            cout<<pch<<endl;
-            // cout<<password<<endl;
-            // Store in cache
-            // username_password.push(make_pair(username,password));
+            string password(pch);
+            username_password.insert(make_pair(username,password));
+            cout<<"Registered!\n";
         }
     } 
 }
 
-void proc_chat_send()
+
+int valid_login(string username, string password)
 {
-    int file_dee;
-    char sendBuff[256];
-    // Limit on length of a message in one go : 256
-    while(true)
+    if(username_password.find(username) != username_password.end())
     {
-        if(!chat.empty())
+        if(password.compare(username_password[username]) == 0)
         {
-            char reply[256];
-            memset(sendBuff, '0', sizeof(sendBuff)); 
-            file_dee = chat.front().first;
-            // reply = chat.front().second;
-            chat.pop();
-            fgets(reply, sizeof(reply), stdin);
-            // getline(cin, reply); // Replaces above
-            snprintf(sendBuff, sizeof(sendBuff), "%s\n", reply);
-            write(file_dee, sendBuff, strlen(sendBuff));
+            return 1;
+        }
+        else
+        {
+            return 0;
         }
     }
-}
-
-
-void proc_chat_receive(int connfd)
-{
-    // Limit on length of a message in one go : 256
-    char buffer[256];
-    int ohho;
-    memset(buffer, '0', sizeof(buffer));
-    ohho = read(connfd, buffer, sizeof(buffer));
-    buffer[ohho] = 0;
-    chat.push(make_pair(connfd,buffer));
+    return 0;
 }
 
 int main()
 {
     // Create threads for : user registration, receive messages, send messages
-    // pthread_t pot;
-    // pthread_create(&pot, NULL, register_user, NULL);
-    register_user(NULL);
-    return 0;
+    pthread_t pot;
+    pthread_create(&pot, NULL, register_user, NULL);
+
+    int logged_in = 0;
 
     char buffer[256];
     int listenfd = 0, connfd = 0, ohho = 0;
@@ -115,15 +91,76 @@ int main()
         connfd = accept(listenfd, (struct sockaddr*)NULL, NULL); 
         if(connfd >= 0)
         {
-            cout<<"Incoming! :D"<<endl;
             char *pch;
             memset(buffer,'0',sizeof(buffer));
             ohho = read(connfd,buffer,sizeof(buffer));
-            buffer[ohho] = 0; //End string
+            buffer[ohho] = 0;
             // Extract command type from incoming data
             pch = strtok(buffer," ");
-            // switch-case on pch, pass it on to respective functions for managing
-            // pch = strtok (NULL, " ");
+            string command(pch);
+            cout<<command<<endl;
+            if(!command.compare("/login"))
+            {
+                pch = strtok (NULL, " ");
+                string username(pch);
+                pch = strtok (NULL, " ");
+                string password(pch);
+                logged_in = valid_login(username, password);
+                const char* commy;
+                if(logged_in)
+                {
+                    commy = "success";  
+                    name_id[username] = connfd;
+                }
+                else
+                {
+                    commy = "failure";
+                }
+                if( (write(connfd, commy, strlen(commy)) < 0) )
+                {
+                    continue;
+                }
+            }
+            else if(!command.compare("/who"))
+            {
+                // Return list of people online
+                const char* commy = "5 users\n";
+                if( (write(connfd, commy, strlen(commy)) < 0) )
+                {
+                    continue;
+                }
+            }
+            else if(!command.compare("/msg"))
+            {
+                // Look for user in list of logged-in users.
+                // If not, throw error.
+                // Else, push message to message queue.
+            }
+            else if(!command.compare("/create_grp"))
+            {
+                // Check if group by same name exists.
+                // If does, throw error. Else, create group
+            }
+            else if(!command.compare("/join_grp"))
+            {
+                // Check if group exists. If yes, add user to group
+                // Else, throw error.
+            }
+            else if(!command.compare("/send"))
+            {
+                // Check if user exists
+                // Forward to file queue
+            }   
+            else if(!command.compare("/msg_group"))
+            {   
+                // Check if group exists
+                // Check if sender is part of that group group
+                // Forward messsage to group queue
+            }
+            else if(!command.compare("/recv"))
+            {
+                // Wut? :|
+            }
         }
     } 
     return 0;
