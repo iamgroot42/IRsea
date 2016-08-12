@@ -16,7 +16,7 @@ map<int,string> id_name;
 set<int> active_users;
 map<string, string> username_password;
 queue< pair<int, string> > chat;
-map< string, vector<string> > groups; 
+map< string, set<string> > groups; 
 
 void* register_user(void* argv)
 {
@@ -161,9 +161,9 @@ void* per_user(void* void_connfd)
     		const char* commy;
     		if(groups.find(g_name) == groups.end())
     		{
-    			groups[g_name] = vector<string>();
-    			groups[g_name].push_back(id_name[connfd]);
-    			commy = "Group already exists!";
+    			groups[g_name] = set<string>();
+    			groups[g_name].insert(id_name[connfd]);
+    			commy = "Group created!";
     		}
     		else
     		{
@@ -183,7 +183,7 @@ void* per_user(void* void_connfd)
     		else
     		{
     			commy = "Joined group!";
-    			groups[g_name].push_back(id_name[connfd]);
+    			groups[g_name].insert(id_name[connfd]);
     		}
     		send_data(commy, connfd);
 	    }	
@@ -193,14 +193,14 @@ void* per_user(void* void_connfd)
     		string g_name(pch);
     		pch = strtok (NULL, " ");
     		string message(pch);
-    		if(groups.find(g_name) != groups.end())
+    		if(groups.find(g_name) == groups.end())
     		{
     			const char* commy = "Group doesn't exist!";
     			send_data(commy, connfd);
     		}
     		else
     		{
-    			for(vector<string>::iterator it = groups[g_name].begin(); it != groups[g_name].end(); ++it)
+    			for(set<string>::iterator it = groups[g_name].begin(); it != groups[g_name].end(); ++it)
     			{
     				chat.push(make_pair(name_id[*it],message));
     			}
@@ -235,7 +235,8 @@ int main()
 {
     pthread_t pot,pot2;
     pthread_create(&pot, NULL, register_user, NULL);
-    // pthread_create(&pot2, NULL, send_back, NULL);
+    pthread_create(&pot2, NULL, send_back, NULL);
+
     int logged_in = 0, listenfd = 0, connfd = 0;
     sockaddr_in serv_addr; 
     listenfd = socket(AF_INET, SOCK_STREAM, 0);

@@ -162,7 +162,13 @@ int main(int argc, char *argv[])
 		}
 		else if(!command.compare("/msg_group") && logged_in)
 		{
-
+			cin>>username;
+			getline(cin, password);
+			send = command + " " + username + " " + password;
+			if(!send_data(send, irc_sock))
+			{
+				cout<<">> Error communicating with server. Please try again.\n";
+			}
 		}
 		else if(!command.compare("/send") && logged_in)
 		{	
