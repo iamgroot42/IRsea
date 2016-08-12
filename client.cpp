@@ -87,7 +87,7 @@ int main(int argc, char *argv[])
 	pthread_t pot;
     pthread_create(&pot, NULL, server_feedback, (void*)irc_sock);
 
-	string send, message, receipent, username, password, command;
+	string send, username, password, command;
 	int logged_in = 0;
 	cout<<"Welcome to IRsea!\n";
 	while(1)
@@ -101,9 +101,15 @@ int main(int argc, char *argv[])
 		}
 		else if(!command.compare("/logout") && logged_in)
 		{
-			logged_in = 0;
-			// Communicate logout action to server
-			cout<<"Logged out!";
+			if(!send_data(command, IRC_PORT ,irc_sock))
+			{
+				cout<<"Error logging out. Please try again.\n";
+			}
+			else
+			{
+				logged_in = 0;
+				cout<<"Logged out!";
+			}
 		}
 		else if(!command.compare("/register"))
 		{
@@ -131,28 +137,30 @@ int main(int argc, char *argv[])
 		}
 		else if(!command.compare("/who") && logged_in)
 		{
-			send = "/who " + username + " " + password;
+			send = command + " " +  username + " " + password;
 			if(!send_data(send, IRC_PORT, irc_sock))
 			{
 				cout<<"Error communicating with server. Please try again.\n";
 			}
-			// Request server for list of people online
 		}
 		else if(!command.compare("/msg") && logged_in)
 		{
-			// scanf("%s %s",receipent,message);
-			// Look for user in list of logged-in users.
-			// If not, throw error. Else, forward message
+			cin>>username;
+			cin>>password;
+			send = command + " " + username + " " + password;
+			if(!send_data(send, IRC_PORT, irc_sock))
+			{
+				cout<<"Error communicating with server. Please try again.\n";
+			}
 		}
 		else if(!command.compare("/create_grp") && logged_in)
 		{
-			cin>>receipent;
 			// Check if group by same name exists.
 			// If does, throw error. Else, create group
 		}
 		else if(!command.compare("/join_grp") && logged_in)
 		{
-			cin>>receipent;
+			// cin>>username;
 			// Check if group exists. If yes, add self to group
 			// Else, throw error.
 		}

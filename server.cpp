@@ -12,10 +12,10 @@
 using namespace std;
 
 map<string,int> name_id;
-map<int,bool> active_users;
+map<int,string> id_name;
+set<int> active_users;
 map<string, string> username_password;
 queue< pair<int, string> > chat;
-
 
 void* register_user(void* argv)
 {
@@ -69,16 +69,26 @@ bool is_logged_in(int x)
 {
 	if(active_users.find(x) != active_users.end())
     {
-    	return active_users[x];
+    	return true;
     }
     return false;
+}
+
+string online_users()
+{
+	string ret_val = "";
+	for (set<int>::iterator it=active_users.begin(); it!=active_users.end(); ++it)
+	{
+		ret_val += id_name[*it] + "\n";
+	}
+	return ret_val;
 }
 
 void* per_user(void* void_connfd)
 {
 	long connfd = (long)void_connfd;
-	char *pch;
 	int ohho = 0, logged_in = 0;
+	char *pch;
 	char buffer[256];
     memset(buffer,'0',sizeof(buffer));
     while(1)
@@ -89,6 +99,7 @@ void* per_user(void* void_connfd)
 		pch = strtok(buffer," ");
 		string command(pch);
 		logged_in = is_logged_in(connfd);
+		cout<<"Log status "<<logged_in<<endl;
 		cout<<command<<endl;
 		if(!command.compare("/login"))
 		{
@@ -102,7 +113,8 @@ void* per_user(void* void_connfd)
 			{
 				commy = "success";  
 				name_id[username] = connfd;
-				active_users[connfd] = true;
+				id_name[connfd] = username;
+				active_users.insert(connfd);
 			}
 			else
 			{
@@ -115,14 +127,27 @@ void* per_user(void* void_connfd)
 		}
 		else if(!command.compare("/who") && logged_in)
 		{
-        	const char* commy = "5 users\n";
+        	const char* commy = online_users().c_str();;
+        	cout<<"Online user list : "<<commy;
         	if( (write(connfd, commy, strlen(commy)) < 0) )
         	{
 	            continue;
         	}
      	}
+     	else if(!command.compare("/logout") && logged_in)
+		{
+			int c = connfd;
+			active_users.erase(c);
+			name_id.erase(id_name[c]);
+			id_name.erase(c);
+
+     	}
      	else if(!command.compare("/msg") && logged_in)
      	{
+     		pch = strtok (NULL, " ");
+			string to(pch);
+			pch = strtok (NULL, " ");
+			string data(pch);
 
      	}
     	else if(!command.compare("/create_grp") && logged_in)
