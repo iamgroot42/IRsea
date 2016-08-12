@@ -1,3 +1,5 @@
+// Author : iamgroot42
+
 #include <bits/stdc++.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -11,13 +13,19 @@
 
 using namespace std;
 
+// Basically creates a 1-1 mapping between current socket and username (for efficient access)
 map<string,int> name_id;
 map<int,string> id_name;
+// A set of FDs of currently active users
 set<int> active_users;
+// Username-password mapping..stored as cache, written to memory when program ends
 map<string, string> username_password;
+// A queue which contains outgoing data
 queue< pair<int, string> > chat;
+// A mapping of group names and their members
 map< string, set<string> > groups; 
 
+// Thread to listen to register users
 void* register_user(void* argv)
 {
 	char buffer[256];
@@ -48,7 +56,7 @@ void* register_user(void* argv)
     } 
 }
 
-
+// Validates the given username and password
 int valid_login(string username, string password)
 {
     if(username_password.find(username) != username_password.end())
@@ -65,6 +73,7 @@ int valid_login(string username, string password)
     return 0;
 }
 
+// Checks if the given combination is valid
 bool is_logged_in(int x)
 {
 	if(active_users.find(x) != active_users.end())
@@ -74,7 +83,7 @@ bool is_logged_in(int x)
     return false;
 }
 
-
+// Send data back to the client
 int send_data(string data, int sock)
 {
     const char* commy = data.c_str();
@@ -85,6 +94,7 @@ int send_data(string data, int sock)
     return 1;
 }
 
+// String representation of all users currently online
 string online_users()
 {
 	string ret_val = "";
@@ -95,6 +105,7 @@ string online_users()
 	return ret_val.substr(0, ret_val.size()-1);
 }
 
+// A thread spawned per connection, to handle all incoming requests from there
 void* per_user(void* void_connfd)
 {
 	long connfd = (long)void_connfd;
@@ -120,14 +131,14 @@ void* per_user(void* void_connfd)
 			const char* commy;
 			if(logged_in)
 			{
-				commy = "success";  
+				commy = "Signed in!";  
 				name_id[username] = connfd;
 				id_name[connfd] = username;
 				active_users.insert(connfd);
 			}
 			else
 			{
-	        	commy = "failure";
+	        	commy = "Error signing in!";
 			}
 			send_data(commy, connfd);
 		}
@@ -217,6 +228,7 @@ void* per_user(void* void_connfd)
 	}
 }
 
+// Empties the send-queue by sending messages to respective clients
 void* send_back(void* argv)
 {
 	pair<int, string> x;
@@ -231,12 +243,15 @@ void* send_back(void* argv)
 	}	
 }
 
+
 int main()
 {
     pthread_t pot,pot2;
+    // Thread to handle registrations
     pthread_create(&pot, NULL, register_user, NULL);
+    // Thread to handle out-going messages
     pthread_create(&pot2, NULL, send_back, NULL);
-
+    // Main thread
     int logged_in = 0, listenfd = 0, connfd = 0;
     sockaddr_in serv_addr; 
     listenfd = socket(AF_INET, SOCK_STREAM, 0);

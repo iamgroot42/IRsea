@@ -1,3 +1,5 @@
+// Author : iamgroot42
+
 #include <bits/stdc++.h>
 #include <stdio.h>
 #include <sys/socket.h>
@@ -15,6 +17,7 @@
 
 using namespace std;
 
+// Send data via the given socket-fd
 int send_data(string data, int sock)
 {
     const char* commy = data.c_str();
@@ -25,6 +28,7 @@ int send_data(string data, int sock)
     return 1;
 }
 
+// Thread to read incoming data (from server)
 void* server_feedback(void* void_listenfd)
 {
 	long listenfd = (long)void_listenfd;
@@ -39,6 +43,7 @@ void* server_feedback(void* void_listenfd)
 	}
 }
 
+// Create a socket connection for the given IP and port
 int create_socket_and_connect(int port)
 {
 	int sock = 0;
@@ -64,6 +69,7 @@ int create_socket_and_connect(int port)
     return sock;
 }
 
+
 int main(int argc, char *argv[])
 {
 	// Establish connection
@@ -73,7 +79,6 @@ int main(int argc, char *argv[])
     // Create thread for receiving messages
 	pthread_t pot;
     pthread_create(&pot, NULL, server_feedback, (void*)irc_sock);
-
 	string send, username, password, command;
 	int logged_in = 0;
 	cout<<">> Welcome to IRsea!\n";
@@ -172,7 +177,7 @@ int main(int argc, char *argv[])
 		}
 		else if(!command.compare("/send") && logged_in)
 		{	
-
+			
 		}
 		else if(!command.compare("/recv") && logged_in)
 		{
