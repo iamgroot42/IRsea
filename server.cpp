@@ -16,23 +16,24 @@ map<int,string> id_name;
 set<int> active_users;
 map<string, string> username_password;
 queue< pair<int, string> > chat;
+map< string, vector<string> > groups; 
 
 void* register_user(void* argv)
 {
-    char buffer[256];
-    int listenfd = 0, connfd = 0, ohho = 0;
-    sockaddr_in serv_addr; 
-    listenfd = socket(AF_INET, SOCK_STREAM, 0);
-    memset(&serv_addr, '0', sizeof(serv_addr)); 
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_port = htons(REGISTER_PORT); 
-    bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)); 
-    listen(listenfd, 5);
-    while(1)
+	char buffer[256];
+	int listenfd = 0, connfd = 0, ohho = 0;
+	sockaddr_in serv_addr; 
+	listenfd = socket(AF_INET, SOCK_STREAM, 0);
+	memset(&serv_addr, '0', sizeof(serv_addr)); 
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	serv_addr.sin_port = htons(REGISTER_PORT); 
+	bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)); 
+	listen(listenfd, 5);
+	connfd = accept(listenfd, (struct sockaddr*)NULL, NULL); 
+	if(connfd >= 0)
     {
-        connfd = accept(listenfd, (struct sockaddr*)NULL, NULL); 
-        if(connfd >= 0)
+		while(1)
         {
             char *pch;
             memset(buffer,'0',sizeof(buffer));
@@ -43,7 +44,6 @@ void* register_user(void* argv)
             pch = strtok (NULL, " ");
             string password(pch);
             username_password.insert(make_pair(username,password));
-            cout<<"Registered!\n";
         }
     } 
 }
@@ -74,6 +74,17 @@ bool is_logged_in(int x)
     return false;
 }
 
+
+int send_data(string data, int sock)
+{
+    const char* commy = data.c_str();
+    if( (write(sock, commy, strlen(commy)) < 0) )
+    {
+        return 0;
+    }
+    return 1;
+}
+
 string online_users()
 {
 	string ret_val = "";
@@ -81,26 +92,24 @@ string online_users()
 	{
 		ret_val += id_name[*it] + "\n";
 	}
-	return ret_val;
+	return ret_val.substr(0, ret_val.size()-1);
 }
 
 void* per_user(void* void_connfd)
 {
 	long connfd = (long)void_connfd;
 	int ohho = 0, logged_in = 0;
-	char *pch;
 	char buffer[256];
-    memset(buffer,'0',sizeof(buffer));
     while(1)
     {
+    	memset(buffer,'0',sizeof(buffer));
 		ohho = read(connfd,buffer,sizeof(buffer));
 		buffer[ohho] = 0;
+		cout<<"LOG : "<<buffer<<endl;
 		// Extract command type from incoming data
-		pch = strtok(buffer," ");
+		char *pch = strtok(buffer," ");
 		string command(pch);
 		logged_in = is_logged_in(connfd);
-		cout<<"Log status "<<logged_in<<endl;
-		cout<<command<<endl;
 		if(!command.compare("/login"))
 		{
 			pch = strtok (NULL, " ");
@@ -120,19 +129,12 @@ void* per_user(void* void_connfd)
 			{
 	        	commy = "failure";
 			}
-			if( (write(connfd, commy, strlen(commy)) < 0) )
-			{
-		        continue;
-			}
+			send_data(commy, connfd);
 		}
 		else if(!command.compare("/who") && logged_in)
 		{
-        	const char* commy = online_users().c_str();;
-        	cout<<"Online user list : "<<commy;
-        	if( (write(connfd, commy, strlen(commy)) < 0) )
-        	{
-	            continue;
-        	}
+        	const char* commy = online_users().c_str();
+        	send_data(commy, connfd);
      	}
      	else if(!command.compare("/logout") && logged_in)
 		{
@@ -140,7 +142,9 @@ void* per_user(void* void_connfd)
 			active_users.erase(c);
 			name_id.erase(id_name[c]);
 			id_name.erase(c);
-
+			// Close this connection; destroy thread
+			close(c);
+			break;
      	}
      	else if(!command.compare("/msg") && logged_in)
      	{
@@ -148,21 +152,61 @@ void* per_user(void* void_connfd)
 			string to(pch);
 			pch = strtok (NULL, " ");
 			string data(pch);
-
+			chat.push(make_pair(connfd, data));
      	}
     	else if(!command.compare("/create_grp") && logged_in)
     	{
-
+    		pch = strtok (NULL, " ");
+    		string g_name(pch);
+    		const char* commy;
+    		if(groups.find(g_name) == groups.end())
+    		{
+    			groups[g_name] = vector<string>();
+    			groups[g_name].push_back(id_name[connfd]);
+    			commy = "Group already exists!";
+    		}
+    		else
+    		{
+    			commy = "Group already exists!";
+    		}
+    		send_data(commy, connfd);
     	}
     	else if(!command.compare("/join_grp") && logged_in)
     	{
-
-	    }
-	    else if(!command.compare("/send") && logged_in)
-	    {
-
-    	}   
+    		pch = strtok (NULL, " ");
+    		string g_name(pch);
+    		const char* commy;
+    		if(groups.find(g_name) == groups.end())
+    		{
+    			commy = "Group doesn't exist!";
+    		}
+    		else
+    		{
+    			commy = "Joined group!";
+    			groups[g_name].push_back(id_name[connfd]);
+    		}
+    		send_data(commy, connfd);
+	    }	
     	else if(!command.compare("/msg_group") && logged_in)
+	    {
+	    	pch = strtok (NULL, " ");
+    		string g_name(pch);
+    		pch = strtok (NULL, " ");
+    		string message(pch);
+    		if(groups.find(g_name) != groups.end())
+    		{
+    			const char* commy = "Group doesn't exist!";
+    			send_data(commy, connfd);
+    		}
+    		else
+    		{
+    			for(vector<string>::iterator it = groups[g_name].begin(); it != groups[g_name].end(); ++it)
+    			{
+    				chat.push(make_pair(name_id[*it],message));
+    			}
+    		}
+    	}   
+	    else if(!command.compare("/send") && logged_in)
     	{   
 
     	}
@@ -173,11 +217,25 @@ void* per_user(void* void_connfd)
 	}
 }
 
+void* send_back(void* argv)
+{
+	pair<int, string> x;
+	while(true)
+	{
+		while(chat.size())
+		{
+			x = chat.front();
+			chat.pop();
+			send_data(x.second, x.first);
+		}	
+	}	
+}
+
 int main()
 {
-    pthread_t pot;
+    pthread_t pot,pot2;
     pthread_create(&pot, NULL, register_user, NULL);
-
+    // pthread_create(&pot2, NULL, send_back, NULL);
     int logged_in = 0, listenfd = 0, connfd = 0;
     sockaddr_in serv_addr; 
     listenfd = socket(AF_INET, SOCK_STREAM, 0);
