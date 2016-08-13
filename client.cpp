@@ -79,7 +79,8 @@ int main(int argc, char *argv[])
     // Create thread for receiving messages
 	pthread_t pot;
     pthread_create(&pot, NULL, server_feedback, (void*)irc_sock);
-	string send, username, password, command;
+	string send, username, password, command, current_group;
+	current_group = "";
 	int logged_in = 0;
 	cout<<">> Welcome to IRsea!\n";
 	while(1)
@@ -88,22 +89,25 @@ int main(int argc, char *argv[])
 		if(!command.compare("/exit"))
 		{
 			// Communicate logout action to server
-			close(irc_sock);
-			close(register_sock);
-			cout<<">> Exiting!\nThanks for using IR-sea!\n";
-			return 0;
-		}
-		else if(!command.compare("/logout") && logged_in)
-		{
-			if(!send_data(command ,irc_sock))
+			bool kill = true;
+			if(logged_in)
 			{
-				cout<<">> Error logging out. Please try again.\n";
+				if(!send_data(command ,irc_sock))
+				{
+					cout<<">> Error logging out. Please try again.\n";
+					kill = false;
+				}
 			}
-			else
+			if(kill)
 			{
-				logged_in = 0;
-				cout<<">> Logged out!\n";
+				// Kill thread listening for feedback
+				pthread_kill(pot,0);
+				close(irc_sock);
+				close(register_sock);
+				cout<<">> Exiting!\nThanks for using IR-sea!\n";
+				return 0;
 			}
+			
 		}
 		else if(!command.compare("/register"))
 		{
@@ -113,6 +117,10 @@ int main(int argc, char *argv[])
 			if(!send_data(send, register_sock))
 			{
 				cout<<">> Error in registration. Please try again.\n";
+			}
+			else
+			{
+				cout<<">> Registered! You may now log in\n";
 			}
 		}
 		else if(!command.compare("/login"))
@@ -140,7 +148,8 @@ int main(int argc, char *argv[])
 		else if(!command.compare("/msg") && logged_in)
 		{
 			cin>>username;
-			getline(cin, password);
+			// getline(cin, password);
+			cin>>password;
 			send = command + " " + username + " " + password;
 			if(!send_data(send, irc_sock))
 			{
@@ -164,15 +173,26 @@ int main(int argc, char *argv[])
 			{
 				cout<<">> Error communicating with server. Please try again.\n";
 			}
+			else
+			{
+				current_group = username;
+			}
 		}
 		else if(!command.compare("/msg_group") && logged_in)
 		{
-			cin>>username;
-			getline(cin, password);
-			send = command + " " + username + " " + password;
-			if(!send_data(send, irc_sock))
+			// getline(cin, password);
+			cin>>password;
+			if(current_group == "")
 			{
-				cout<<">> Error communicating with server. Please try again.\n";
+				cout<<">> Join a group before you can send messages.\n";
+			}
+			else
+			{
+				send = command + " " + current_group + " " + password;
+				if(!send_data(send, irc_sock))
+				{
+					cout<<">> Error communicating with server. Please try again.\n";
+				}
 			}
 		}
 		else if(!command.compare("/send") && logged_in)

@@ -23,7 +23,7 @@ map<string, string> username_password;
 // A queue which contains outgoing data
 queue< pair<int, string> > chat;
 // A mapping of group names and their members
-map< string, set<string> > groups; 
+map< string, set<string> > groups;
 
 // Thread to listen to register users
 void* register_user(void* argv)
@@ -147,7 +147,7 @@ void* per_user(void* void_connfd)
         	const char* commy = online_users().c_str();
         	send_data(commy, connfd);
      	}
-     	else if(!command.compare("/logout") && logged_in)
+     	else if(!command.compare("/exit") && logged_in)
 		{
 			int c = connfd;
 			active_users.erase(c);
@@ -155,7 +155,7 @@ void* per_user(void* void_connfd)
 			id_name.erase(c);
 			// Close this connection; destroy thread
 			close(c);
-			break;
+			return 0;
      	}
      	else if(!command.compare("/msg") && logged_in)
      	{
@@ -213,7 +213,11 @@ void* per_user(void* void_connfd)
     		{
     			for(set<string>::iterator it = groups[g_name].begin(); it != groups[g_name].end(); ++it)
     			{
-    				chat.push(make_pair(name_id[*it],message));
+    				// Message sent by user shouldn't coma back to them
+    				if(name_id[*it] != connfd)
+    				{
+    					chat.push(make_pair(name_id[*it],message));	
+    				}
     			}
     		}
     	}   
@@ -265,7 +269,8 @@ int main()
     {
         connfd = accept(listenfd, (struct sockaddr*)NULL, NULL);
         // New thread per user (for communication)
-        pthread_create(&pot, NULL, per_user, (void*)connfd);
+    	pthread_t pot_temp;
+        pthread_create(&pot_temp, NULL, per_user, (void*)connfd);
     } 
     return 0;
 }
