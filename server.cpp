@@ -25,10 +25,22 @@ queue< pair<int, string> > chat;
 // A mapping of group names and their members
 map< string, set<string> > groups;
 
+// Send data back to the client
+int send_data(string data, int sock)
+{
+    const char* commy = data.c_str();
+    if( (write(sock, commy, strlen(commy)) < 0) )
+    {
+        return 0;
+    }
+    return 1;
+}
+
 // Thread to listen to register users
 void* register_user(void* argv)
 {
 	char buffer[256];
+    string confirm = "Registered!";
 	int listenfd = 0, connfd = 0, ohho = 0;
 	sockaddr_in serv_addr; 
 	listenfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -38,20 +50,22 @@ void* register_user(void* argv)
 	serv_addr.sin_port = htons(REGISTER_PORT); 
 	bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)); 
 	listen(listenfd, 5);
-	connfd = accept(listenfd, (struct sockaddr*)NULL, NULL); 
-	if(connfd >= 0)
+	while(1)
     {
-		while(1)
+		connfd = accept(listenfd, (struct sockaddr*)NULL, NULL); 
+		if(connfd >= 0)
         {
             char *pch;
             memset(buffer,'0',sizeof(buffer));
             ohho = read(connfd,buffer,sizeof(buffer));
             buffer[ohho] = 0;
+            cout<<"LOG : /register "<<buffer<<endl;
             pch = strtok(buffer," ");
             string username(pch);
             pch = strtok (NULL, " ");
             string password(pch);
             username_password.insert(make_pair(username,password));
+            send_data(confirm, connfd);
         }
     } 
 }
@@ -83,17 +97,6 @@ bool is_logged_in(int x)
     return false;
 }
 
-// Send data back to the client
-int send_data(string data, int sock)
-{
-    const char* commy = data.c_str();
-    if( (write(sock, commy, strlen(commy)) < 0) )
-    {
-        return 0;
-    }
-    return 1;
-}
-
 // String representation of all users currently online
 string online_users()
 {
@@ -115,6 +118,17 @@ void* per_user(void* void_connfd)
     {
     	memset(buffer,'0',sizeof(buffer));
 		ohho = read(connfd,buffer,sizeof(buffer));
+		// Client ended connection.. close it
+		if(!ohho)
+		{
+			int c = connfd;
+			active_users.erase(c);
+			name_id.erase(id_name[c]);
+			id_name.erase(c);
+			// Close this connection; destroy thread
+			close(c);
+			return 0;
+		}
 		buffer[ohho] = 0;
 		cout<<"LOG : "<<buffer<<endl;
 		// Extract command type from incoming data
@@ -163,7 +177,7 @@ void* per_user(void* void_connfd)
 			string to(pch);
 			pch = strtok (NULL, " ");
 			string data(pch);
-			chat.push(make_pair(connfd, data));
+			chat.push(make_pair(name_id[to], data));
      	}
     	else if(!command.compare("/create_grp") && logged_in)
     	{
@@ -242,7 +256,8 @@ void* send_back(void* argv)
 		{
 			x = chat.front();
 			chat.pop();
-			send_data(x.second, x.first);
+			string formatted = "(" + id_name[x.first] + ") " + x.second;
+			send_data(formatted, x.first);
 		}	
 	}	
 }

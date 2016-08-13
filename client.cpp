@@ -11,11 +11,11 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-#define SERVER_IP "127.0.0.1"
 #define REGISTER_PORT 5004
 #define IRC_PORT 5005
 
 using namespace std;
+bool server_down = false;
 
 // Send data via the given socket-fd
 int send_data(string data, int sock)
@@ -38,13 +38,21 @@ void* server_feedback(void* void_listenfd)
 	{
 		memset(buffer,'0',sizeof(buffer));
 		ohho = read(listenfd,buffer,sizeof(buffer));
+		// If server shuts down/terminates connection
+		if(!ohho)
+		{
+			cout<<">> Connection with server terminated!\n";
+			server_down = true;
+			close(listenfd);
+			return 0;
+		}
 		buffer[ohho] = 0;
 		cout<<">> "<<buffer<<endl;
 	}
 }
 
 // Create a socket connection for the given IP and port
-int create_socket_and_connect(int port)
+int create_socket_and_connect(char* address, int port)
 {
 	int sock = 0;
 	struct sockaddr_in serv_addr;
@@ -56,7 +64,7 @@ int create_socket_and_connect(int port)
 	memset(&serv_addr, '0', sizeof(serv_addr)); 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(port); 
-    if(inet_pton(AF_INET, SERVER_IP, &serv_addr.sin_addr)<=0)
+    if(inet_pton(AF_INET, address, &serv_addr.sin_addr)<=0)
     {
         cerr<<">> Invalid address\n";
         return 0;
@@ -74,17 +82,25 @@ int main(int argc, char *argv[])
 {
 	// Establish connection
 	long irc_sock,register_sock;
-	irc_sock = create_socket_and_connect(IRC_PORT);
-	register_sock = create_socket_and_connect(REGISTER_PORT);
-    // Create thread for receiving messages
+	irc_sock = create_socket_and_connect(argv[1], IRC_PORT);
+	register_sock = create_socket_and_connect(argv[1], REGISTER_PORT);
+    // Create thread for receiving messages on irc socket
 	pthread_t pot;
     pthread_create(&pot, NULL, server_feedback, (void*)irc_sock);
+    // Create thread for receiving messages on register socket
+	pthread_t pot2;
+    pthread_create(&pot2, NULL, server_feedback, (void*)register_sock);
 	string send, username, password, command, current_group;
 	current_group = "";
 	int logged_in = 0;
 	cout<<">> Welcome to IRsea!\n";
 	while(1)
 	{
+		// Kill main thread if server is down.
+		if(server_down)
+		{
+			return 0;
+		}
 		cin>>command;
 		if(!command.compare("/exit"))
 		{
@@ -117,10 +133,6 @@ int main(int argc, char *argv[])
 			if(!send_data(send, register_sock))
 			{
 				cout<<">> Error in registration. Please try again.\n";
-			}
-			else
-			{
-				cout<<">> Registered! You may now log in\n";
 			}
 		}
 		else if(!command.compare("/login"))

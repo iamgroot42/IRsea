@@ -34,4 +34,4 @@ The following commands are supported :
 
 ## Running it
 * To run the server, compile it as:  ` g++ -pthread server.cpp -o server`. Then, run it as `./server`
-* To run a client, compile it as:  ` g++ -pthread client.cpp -o client`. Then, run it as `./client`
+* To run a client, compile it as:  ` g++ -pthread client.cpp -o client`. Then, run it as `./client <SERVER ADDRESS>`
