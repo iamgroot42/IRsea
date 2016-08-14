@@ -14,7 +14,7 @@
 
 #define REGISTER_PORT 5004
 #define IRC_PORT 5005
-#define BUFFER_SIZE 500
+#define BUFFER_SIZE 512
 
 using namespace std;
 bool server_down = false, logged_in = false;
@@ -220,11 +220,49 @@ int main(int argc, char *argv[])
 		}
 		else if(!command.compare("/send") && logged_in)
 		{	
-			// FILE* fp = fopen("ohho","r");
-			// sendfile(irc_sock,fileno(fp),NULL,BUFFER_SIZE);	
+			cin>>username>>password;
+			try
+			{
+				send = command + " " + username;
+				FILE* fp = fopen(password.c_str(),"r");
+				if(!send_data(send, irc_sock))
+				{
+					cout<<">> Error communicating with server. Please try again.\n";
+				}
+				int wth;
+				while((wth = sendfile(irc_sock,fileno(fp),NULL,BUFFER_SIZE)) == BUFFER_SIZE);
+			}
+			catch(...)
+			{
+				cout<<">> Error opening file. Please sepcify correct path!\n";
+				continue;
+			}
 		}
 		else if(!command.compare("/recv") && logged_in)
 		{
+			if(!send_data(command, irc_sock))
+			{
+				cout<<">> Error communicating with server. Please try again.\n";
+			}
+			else
+			{
+				// Kill thread which listens to incoming data; we need that port for receiving file
+				pthread_kill(pot2, 0);
+				FILE* fp = fopen("file_from_server","w");
+				char buffer[BUFFER_SIZE];
+            	memset(buffer,'0',sizeof(buffer));
+            	int ohho;
+            	while((ohho = read(irc_sock,buffer,sizeof(buffer))) == BUFFER_SIZE)
+            	{
+	                buffer[ohho] = 0;
+                	fwrite(buffer , 1 , sizeof(buffer) ,fp);
+                	fflush(fp);
+                	memset(buffer,'0',sizeof(buffer));
+            	}	
+            	fclose(fp);
+            	// Restart thread which listens to incoming data
+            	pthread_create(&pot2, NULL, server_feedback, (void*)register_sock);
+            }
 
 		}
 		else

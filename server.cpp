@@ -6,11 +6,12 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <sys/sendfile.h>
 #include <arpa/inet.h> 
 
 #define REGISTER_PORT 5004
 #define IRC_PORT 5005
-#define BUFFER_SIZE 500
+#define BUFFER_SIZE 512
 #define USER_FILENAME "users"
 
 using namespace std;
@@ -28,8 +29,12 @@ queue< pair<int, string> > chat;
 queue< pair<int, pair<string,string> > > chat_grp;
 // A mapping of group names and their members
 map< string, set<string> > groups;
+// A one-many mapping of users and files waiting for them
+multimap<string, string> waiting_files;
+// Thread-safe counter for files
+int file_counter = 1;
 // Mutex locks for all shared variables
-mutex name_id_l, id_name_l, active_users_l, username_password_l, chat_l, chat_grp_l, groups_l;
+mutex name_id_l, id_name_l, active_users_l, username_password_l, chat_l, chat_grp_l, groups_l, waiting_files_l, file_counter_l;
 
 // Send data back to the client
 int send_data(string data, int sock)
@@ -86,6 +91,10 @@ void* register_user(void* argv)
             char *pch;
             memset(buffer,'0',sizeof(buffer));
             ohho = read(connfd,buffer,sizeof(buffer));
+            if(!ohho)
+            {
+                continue;
+            }
             buffer[ohho] = 0;
             cout<<"LOG : /register "<<buffer<<endl;
             pch = strtok(buffer," ");
@@ -157,6 +166,7 @@ string online_users()
 // A thread spawned per connection, to handle all incoming requests from there
 void* per_user(void* void_connfd)
 {
+    string current_username;
 	long connfd = (long)void_connfd;
 	int ohho = 0, logged_in = 0;
 	char buffer[BUFFER_SIZE];
@@ -205,6 +215,7 @@ void* per_user(void* void_connfd)
 					name_id_l.lock();
 					id_name_l.lock();
 					active_users_l.lock(); 
+                    current_username = username;
 					name_id[username] = connfd;
 					id_name[connfd] = username;
 					active_users.insert(connfd);
@@ -257,8 +268,10 @@ void* per_user(void* void_connfd)
 				string data(pch);
 				// Mutex lock
 				chat_l.lock();
+                name_id_l.lock();
 				chat.push(make_pair(name_id[to], data));
-				chat_l.unlock();
+                name_id_l.unlock();
+                chat_l.unlock();
 			}
 			catch(...)
 			{
@@ -277,7 +290,7 @@ void* per_user(void* void_connfd)
     			if(groups.find(g_name) == groups.end())
     			{
 	    			groups[g_name] = set<string>();
-    				groups[g_name].insert(id_name[connfd]);
+    				groups[g_name].insert(current_username);
     				commy = "Group created!";
     			}
     			else
@@ -308,7 +321,7 @@ void* per_user(void* void_connfd)
     			else
     			{
 	    			commy = "Joined group!";
-    				groups[g_name].insert(id_name[connfd]);
+    				groups[g_name].insert(current_username);
     			}
     			groups_l.unlock();
     			send_data(commy, connfd);
@@ -336,7 +349,7 @@ void* per_user(void* void_connfd)
     				send_data(commy, connfd);
     			}
     			// A sanity check; just in case client modifies their code before running it
-    			else if(groups[g_name].find(id_name[connfd]) == groups[g_name].end())
+    			else if(groups[g_name].find(current_username) == groups[g_name].end())
     			{
     				groups_l.unlock();
     				commy = "You're not part of this group!";
@@ -346,7 +359,9 @@ void* per_user(void* void_connfd)
     			{
     				set<string> tempo = groups[g_name];
     				groups_l.unlock();
+                    // Mutex lock
     				chat_grp_l.lock();
+                    name_id_l.lock();
     				for(set<string>::iterator it = tempo.begin(); it != tempo.end(); ++it)
     				{
     					// Message sent by user shouldn't coma back to them
@@ -355,6 +370,7 @@ void* per_user(void* void_connfd)
     						chat_grp.push(make_pair(name_id[*it],make_pair(g_name, message)));	
     					}
     				}
+                    name_id_l.unlock();
     				chat_grp_l.unlock();
     			}
     		}
@@ -366,11 +382,59 @@ void* per_user(void* void_connfd)
     	}   
 	    else if(!command.compare("/send") && logged_in)
     	{   
-
+            pch = strtok(NULL, " ");
+            string to_name(pch);
+            // Mutex lock
+            file_counter_l.lock();
+            name_id_l.lock();
+            int temp = file_counter++;
+            if(name_id.find(to_name) == name_id.end())
+            {
+                const char* commy = "No user by this name exists!";
+                send_data(commy, connfd);
+                name_id_l.unlock();
+                file_counter_l.unlock();
+            }
+            else
+            {
+                name_id_l.unlock();
+                file_counter_l.unlock();
+                string file_counter_string("temp_data/" + to_string(temp));
+                FILE* fp = fopen(file_counter_string.c_str(),"w");
+                memset(buffer,'0',sizeof(buffer));
+                while((ohho = read(connfd,buffer,sizeof(buffer))) == BUFFER_SIZE)
+                {
+                    buffer[ohho] = 0;
+                    fwrite(buffer , 1 , sizeof(buffer) ,fp);
+                    fflush(fp);
+                    memset(buffer,'0',sizeof(buffer));
+                }
+                // Mutex lock
+                waiting_files_l.lock();
+                waiting_files.insert(make_pair(current_username, file_counter_string));
+                waiting_files_l.unlock();
+                fclose(fp);
+            }
     	}
     	else if(!command.compare("/recv") && logged_in)
     	{
-
+            // Mutex lock
+            waiting_files_l.lock();
+            multimap<string,string>::iterator it = waiting_files.find(current_username);
+            if(it != waiting_files.end())
+            {
+                waiting_files_l.unlock();
+                string fname = (*it).second;
+                FILE* fp = fopen(fname.c_str(),"r");
+                int wth;
+                while((wth = sendfile(connfd,fileno(fp),NULL,BUFFER_SIZE)) == BUFFER_SIZE);
+            }
+            else
+            {
+                waiting_files_l.unlock();
+                const char* commy = "No files for you!";
+                send_data(commy, connfd);
+            }
 	    }
 	}
 }
