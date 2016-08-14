@@ -13,9 +13,10 @@
 
 #define REGISTER_PORT 5004
 #define IRC_PORT 5005
+#define BUFFER_SIZE 500
 
 using namespace std;
-bool server_down = false;
+bool server_down = false, logged_in = false;
 
 // Send data via the given socket-fd
 int send_data(string data, int sock)
@@ -32,7 +33,7 @@ int send_data(string data, int sock)
 void* server_feedback(void* void_listenfd)
 {
 	long listenfd = (long)void_listenfd;
-	char buffer[256];
+	char buffer[BUFFER_SIZE];
 	int ohho = 0;
 	while(1)
 	{
@@ -47,6 +48,11 @@ void* server_feedback(void* void_listenfd)
 			return 0;
 		}
 		buffer[ohho] = 0;
+		// Confirmation for sign-in; update status
+		if(!strcmp("Signed in!",buffer))
+		{
+			logged_in = true;
+		}
 		cout<<">> "<<buffer<<endl;
 	}
 }
@@ -80,6 +86,11 @@ int create_socket_and_connect(char* address, int port)
 
 int main(int argc, char *argv[])
 {
+	if(argc<2)
+	{
+		cout<<"Usage: "<<argv[0]<<" <server ip>\n";
+		return 0;
+	}
 	// Establish connection
 	long irc_sock,register_sock;
 	irc_sock = create_socket_and_connect(argv[1], IRC_PORT);
@@ -92,7 +103,6 @@ int main(int argc, char *argv[])
     pthread_create(&pot2, NULL, server_feedback, (void*)register_sock);
 	string send, username, password, command, current_group;
 	current_group = "";
-	int logged_in = 0;
 	cout<<">> Welcome to IRsea!\n";
 	while(1)
 	{
@@ -120,7 +130,7 @@ int main(int argc, char *argv[])
 				pthread_kill(pot,0);
 				close(irc_sock);
 				close(register_sock);
-				cout<<">> Exiting!\nThanks for using IR-sea!\n";
+				cout<<">> Exiting!\nThanks for using IRsea!\n";
 				return 0;
 			}
 			
@@ -146,7 +156,7 @@ int main(int argc, char *argv[])
 			}
 			else
 			{
-				logged_in = 1;
+				logged_in = true;
 			}
 		}
 		else if(!command.compare("/who") && logged_in)

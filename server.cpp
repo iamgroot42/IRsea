@@ -10,6 +10,7 @@
 
 #define REGISTER_PORT 5004
 #define IRC_PORT 5005
+#define BUFFER_SIZE 500
 
 using namespace std;
 
@@ -20,8 +21,10 @@ map<int,string> id_name;
 set<int> active_users;
 // Username-password mapping..stored as cache, written to memory when program ends
 map<string, string> username_password;
-// A queue which contains outgoing data
+// A queue which contains outgoing p2p data
 queue< pair<int, string> > chat;
+// A queue which contains outgoing group data
+queue< pair<int, pair<string,string> > > chat_grp;
 // A mapping of group names and their members
 map< string, set<string> > groups;
 
@@ -39,7 +42,26 @@ int send_data(string data, int sock)
 // Thread to listen to register users
 void* register_user(void* argv)
 {
-	char buffer[256];
+	// Read registered accounts from file
+	// fstream file((string)argv);
+	fstream file("users", ios::app);
+	string line;
+	if (file.is_open())
+  	{
+	    while(getline(file,line) )
+	    {
+	    	char *pch = strdup(line.c_str());
+      		string username(pch);
+      		pch = strtok(NULL, " ");
+      		string password(pch);
+      		username_password[username] = password;
+    	}
+  	}
+  	else
+  	{
+  		cout<<"LOG : users' file not created yet.\n";
+  	}
+	char buffer[BUFFER_SIZE];
     string confirm = "Registered!";
 	int listenfd = 0, connfd = 0, ohho = 0;
 	sockaddr_in serv_addr; 
@@ -66,8 +88,11 @@ void* register_user(void* argv)
             string password(pch);
             username_password.insert(make_pair(username,password));
             send_data(confirm, connfd);
+            // Write to file
+            file<<username<<" "<<password<<endl;
         }
-    } 
+    }
+    file.close(); 
 }
 
 // Validates the given username and password
@@ -113,7 +138,7 @@ void* per_user(void* void_connfd)
 {
 	long connfd = (long)void_connfd;
 	int ohho = 0, logged_in = 0;
-	char buffer[256];
+	char buffer[BUFFER_SIZE];
     while(1)
     {
     	memset(buffer,'0',sizeof(buffer));
@@ -223,6 +248,12 @@ void* per_user(void* void_connfd)
     			const char* commy = "Group doesn't exist!";
     			send_data(commy, connfd);
     		}
+    		// A sanity check; just in case client modifies their code before running it
+    		else if(groups[g_name].find(id_name[connfd]) == groups[g_name].end())
+    		{
+    			const char* commy = "You're not part of this group!";
+    			send_data(commy, connfd);	
+    		}
     		else
     		{
     			for(set<string>::iterator it = groups[g_name].begin(); it != groups[g_name].end(); ++it)
@@ -230,7 +261,7 @@ void* per_user(void* void_connfd)
     				// Message sent by user shouldn't coma back to them
     				if(name_id[*it] != connfd)
     				{
-    					chat.push(make_pair(name_id[*it],message));	
+    					chat_grp.push(make_pair(name_id[*it],make_pair(g_name, message)));	
     				}
     			}
     		}
@@ -259,17 +290,35 @@ void* send_back(void* argv)
 			string formatted = "(" + id_name[x.first] + ") " + x.second;
 			send_data(formatted, x.first);
 		}	
+	}
+}
+
+// Empties the send-queue by sending messages to respective clients
+void* send_back_grp(void* argv)
+{
+	pair<int, pair<string,string> > x;
+	while(true)
+	{
+		while(chat_grp.size())
+		{
+			x = chat_grp.front();
+			chat_grp.pop();
+			string formatted = "(" + x.second.first + ") " + x.second.second;
+			send_data(formatted, x.first);
+		}	
 	}	
 }
 
 
 int main()
 {
-    pthread_t pot,pot2;
+    pthread_t pot,pot2,pot3;
     // Thread to handle registrations
     pthread_create(&pot, NULL, register_user, NULL);
-    // Thread to handle out-going messages
+    // Thread to handle out-going p2p messages
     pthread_create(&pot2, NULL, send_back, NULL);
+    // Thread to handle out-going group messages
+    pthread_create(&pot3, NULL, send_back_grp, NULL);
     // Main thread
     int logged_in = 0, listenfd = 0, connfd = 0;
     sockaddr_in serv_addr; 
