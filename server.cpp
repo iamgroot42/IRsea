@@ -72,6 +72,7 @@ void* register_user(void* argv)
   	{
   		cout<<"LOG : users' file not created yet.\n";
   	}
+    // Socket creation snippet
 	char buffer[BUFFER_SIZE];
     string confirm = "Registered!";
 	int listenfd = 0, connfd = 0, ohho = 0;
@@ -135,7 +136,7 @@ int valid_login(string username, string password)
     return 0;
 }
 
-// Checks if the given combination is valid
+// Checks if the given combination is valid, and this user is currently logged in
 bool is_logged_in(int x)
 {
 	// Mutex lock
@@ -215,9 +216,11 @@ void* per_user(void* void_connfd)
 					name_id_l.lock();
 					id_name_l.lock();
 					active_users_l.lock(); 
+                    // Update 1-1(effective) mapping of connectionID and username
                     current_username = username;
 					name_id[username] = connfd;
 					id_name[connfd] = username;
+                    // Update list of active users
 					active_users.insert(connfd);
 					name_id_l.unlock();
 					id_name_l.unlock();
@@ -269,6 +272,7 @@ void* per_user(void* void_connfd)
 				// Mutex lock
 				chat_l.lock();
                 name_id_l.lock();
+                // Push outgoing message to queue, to be handled by another process
 				chat.push(make_pair(name_id[to], data));
                 name_id_l.unlock();
                 chat_l.unlock();
@@ -287,6 +291,7 @@ void* per_user(void* void_connfd)
     			string g_name(pch);
     			// Mutex lock
     			groups_l.lock();
+                // Check for duplication of group name
     			if(groups.find(g_name) == groups.end())
     			{
 	    			groups[g_name] = set<string>();
@@ -314,6 +319,7 @@ void* per_user(void* void_connfd)
     			string g_name(pch);
     			// Mutex lock
     			groups_l.lock();
+                // Check whether group name exists
     			if(groups.find(g_name) == groups.end())
     			{
 	    			commy = "Group doesn't exist!";
@@ -388,6 +394,7 @@ void* per_user(void* void_connfd)
             file_counter_l.lock();
             name_id_l.lock();
             int temp = file_counter++;
+            // Check whether user with this name exists
             if(name_id.find(to_name) == name_id.end())
             {
                 const char* commy = "No user by this name exists!";
@@ -397,6 +404,7 @@ void* per_user(void* void_connfd)
             }
             else
             {
+                // Receive and store file into server storage, ready for retreival by targeted user
                 name_id_l.unlock();
                 file_counter_l.unlock();
                 string file_counter_string("temp_data/" + to_string(temp));
@@ -421,6 +429,7 @@ void* per_user(void* void_connfd)
             // Mutex lock
             waiting_files_l.lock();
             multimap<string,string>::iterator it = waiting_files.find(current_username);
+            // Check if user has any pending files ready for them
             if(it != waiting_files.end())
             {
                 waiting_files_l.unlock();
@@ -481,7 +490,6 @@ void* send_back_grp(void* argv)
 		}	
 	}	
 }
-
 
 int main()
 {

@@ -17,6 +17,7 @@
 #define BUFFER_SIZE 512
 
 using namespace std;
+// Indicator variables for status of server connection, login status
 bool server_down = false, logged_in = false;
 
 // Send data via the given socket-fd
@@ -106,6 +107,7 @@ int create_socket_and_connect(char* address, int port)
 
 int main(int argc, char *argv[])
 {
+	// Argument: IP address of server
 	if(argc<2)
 	{
 		cout<<"Usage: "<<argv[0]<<" <server ip>\n";
@@ -122,6 +124,7 @@ int main(int argc, char *argv[])
 	pthread_t pot2;
     pthread_create(&pot2, NULL, server_feedback, (void*)register_sock);
 	string send, username, password, command, current_group;
+	// Current group joined by client, if any
 	current_group = "";
 	cout<<">> Welcome to IRsea!\n";
 	while(1)
@@ -243,12 +246,14 @@ int main(int argc, char *argv[])
 			try
 			{
 				send = command + " " + username;
+				// Open file 
 				FILE* fp = fopen(password.c_str(),"r");
 				if(!send_data(send, irc_sock))
 				{
 					cout<<">> Error communicating with server. Please try again.\n";
 				}
 				int wth;
+				// Send data to server
 				while((wth = sendfile(irc_sock,fileno(fp),NULL,BUFFER_SIZE)) == BUFFER_SIZE);
 			}
 			catch(...)
@@ -259,6 +264,7 @@ int main(int argc, char *argv[])
 		}
 		else if(!command.compare("/recv") && logged_in)
 		{
+			// Request server to download any pending file
 			if(!send_data(command, irc_sock))
 			{
 				cout<<">> Error communicating with server. Please try again.\n";
@@ -266,10 +272,12 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
+			// Invalid command(s)
 			if(logged_in)
 			{
 				cout<<">> Invalid command! Please read the README for the list of supported commands\n";
 			}
+			// Not logged in
 			else
 			{
 				cout<<">> Not signed in!\n";	
