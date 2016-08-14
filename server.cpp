@@ -411,7 +411,7 @@ void* per_user(void* void_connfd)
                 }
                 // Mutex lock
                 waiting_files_l.lock();
-                waiting_files.insert(make_pair(current_username, file_counter_string));
+                waiting_files.insert(make_pair(to_name, file_counter_string));
                 waiting_files_l.unlock();
                 fclose(fp);
             }
@@ -426,8 +426,13 @@ void* per_user(void* void_connfd)
                 waiting_files_l.unlock();
                 string fname = (*it).second;
                 FILE* fp = fopen(fname.c_str(),"r");
+                // Comunicate start of file transfer
+                send_data(command.c_str(), connfd);
+                // Send file
                 int wth;
                 while((wth = sendfile(connfd,fileno(fp),NULL,BUFFER_SIZE)) == BUFFER_SIZE);
+                // Remove file from server storage
+                // remove(fname);
             }
             else
             {

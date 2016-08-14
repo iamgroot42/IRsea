@@ -54,7 +54,26 @@ void* server_feedback(void* void_listenfd)
 		{
 			logged_in = true;
 		}
-		cout<<">> "<<buffer<<endl;
+		// File being transferred..prepare Uranus
+		if(!strcmp("/recv",buffer))
+		{
+			FILE* fp = fopen("file_from_server","w");
+			memset(buffer,'0',sizeof(buffer));
+			while((ohho = read(listenfd,buffer,sizeof(buffer))) == BUFFER_SIZE)
+			{
+				buffer[ohho] = 0;
+				fwrite(buffer , 1 , sizeof(buffer) ,fp);
+				fflush(fp);
+				memset(buffer,'0',sizeof(buffer));
+			}
+			cout<<">> File received!"<<endl;	
+			fclose(fp);
+		}
+		// Normal conversation; display on console
+		else
+		{
+			cout<<">> "<<buffer<<endl;	
+		}
 	}
 }
 
@@ -244,26 +263,6 @@ int main(int argc, char *argv[])
 			{
 				cout<<">> Error communicating with server. Please try again.\n";
 			}
-			else
-			{
-				// Kill thread which listens to incoming data; we need that port for receiving file
-				pthread_kill(pot2, 0);
-				FILE* fp = fopen("file_from_server","w");
-				char buffer[BUFFER_SIZE];
-            	memset(buffer,'0',sizeof(buffer));
-            	int ohho;
-            	while((ohho = read(irc_sock,buffer,sizeof(buffer))) == BUFFER_SIZE)
-            	{
-	                buffer[ohho] = 0;
-                	fwrite(buffer , 1 , sizeof(buffer) ,fp);
-                	fflush(fp);
-                	memset(buffer,'0',sizeof(buffer));
-            	}	
-            	fclose(fp);
-            	// Restart thread which listens to incoming data
-            	pthread_create(&pot2, NULL, server_feedback, (void*)register_sock);
-            }
-
 		}
 		else
 		{
