@@ -11,6 +11,7 @@
 #define REGISTER_PORT 5004
 #define IRC_PORT 5005
 #define BUFFER_SIZE 500
+#define USER_FILENAME "users"
 
 using namespace std;
 
@@ -27,6 +28,8 @@ queue< pair<int, string> > chat;
 queue< pair<int, pair<string,string> > > chat_grp;
 // A mapping of group names and their members
 map< string, set<string> > groups;
+// Mutex locks for all shared variables
+mutex name_id_l, id_name_l, active_users_l, username_password_l, chat_l, chat_grp_l, groups_l;
 
 // Send data back to the client
 int send_data(string data, int sock)
@@ -44,18 +47,22 @@ void* register_user(void* argv)
 {
 	// Read registered accounts from file
 	// fstream file((string)argv);
-	fstream file("users", ios::app);
+	fstream file(USER_FILENAME, ios::in);
 	string line;
 	if (file.is_open())
   	{
-	    while(getline(file,line) )
+  		username_password_l.lock();
+	    while(getline(file,line))
 	    {
-	    	char *pch = strdup(line.c_str());
+      		char* pch = strtok(strdup(line.c_str()), " ");
       		string username(pch);
       		pch = strtok(NULL, " ");
       		string password(pch);
       		username_password[username] = password;
     	}
+    	username_password_l.unlock();
+    	file.close();
+    	file.open(USER_FILENAME, ios::app);
   	}
   	else
   	{
@@ -86,9 +93,12 @@ void* register_user(void* argv)
             string username(pch);
             pch = strtok (NULL, " ");
             string password(pch);
+            // Mutex lock
+            username_password_l.lock();
             username_password.insert(make_pair(username,password));
+            username_password_l.unlock();
             send_data(confirm, connfd);
-            // Write to file
+            // Write to file (not working rn)
             file<<username<<" "<<password<<endl;
         }
     }
@@ -98,27 +108,36 @@ void* register_user(void* argv)
 // Validates the given username and password
 int valid_login(string username, string password)
 {
+	// Mutex lock
+	username_password_l.lock();
     if(username_password.find(username) != username_password.end())
     {
         if(password.compare(username_password[username]) == 0)
         {
+            username_password_l.unlock();
             return 1;
         }
         else
         {
+        	username_password_l.unlock();
             return 0;
         }
     }
+    username_password_l.unlock();
     return 0;
 }
 
 // Checks if the given combination is valid
 bool is_logged_in(int x)
 {
+	// Mutex lock
+	active_users_l.lock();
 	if(active_users.find(x) != active_users.end())
     {
+    	active_users_l.unlock();
     	return true;
     }
+    active_users_l.unlock();
     return false;
 }
 
@@ -126,10 +145,13 @@ bool is_logged_in(int x)
 string online_users()
 {
 	string ret_val = "";
+	// Mutex lock
+	active_users_l.lock();
 	for (set<int>::iterator it=active_users.begin(); it!=active_users.end(); ++it)
 	{
 		ret_val += id_name[*it] + "\n";
 	}
+	active_users_l.unlock();
 	return ret_val.substr(0, ret_val.size()-1);
 }
 
@@ -147,9 +169,16 @@ void* per_user(void* void_connfd)
 		if(!ohho)
 		{
 			int c = connfd;
+			// Mutex lock
+			active_users_l.lock();
+			name_id_l.lock();
+			id_name_l.lock();
 			active_users.erase(c);
 			name_id.erase(id_name[c]);
 			id_name.erase(c);
+			active_users_l.unlock();
+			name_id_l.unlock();
+			id_name_l.unlock();
 			// Close this connection; destroy thread
 			close(c);
 			return 0;
@@ -170,10 +199,17 @@ void* per_user(void* void_connfd)
 			const char* commy;
 			if(logged_in)
 			{
-				commy = "Signed in!";  
+				commy = "Signed in!"; 
+				// Mutex lock
+				name_id_l.lock();
+				id_name_l.lock();
+				active_users_l.lock(); 
 				name_id[username] = connfd;
 				id_name[connfd] = username;
 				active_users.insert(connfd);
+				name_id_l.unlock();
+				id_name_l.unlock();
+				active_users_l.unlock(); 
 			}
 			else
 			{
@@ -189,9 +225,16 @@ void* per_user(void* void_connfd)
      	else if(!command.compare("/exit") && logged_in)
 		{
 			int c = connfd;
+			// Mutex lock
+			active_users_l.lock();
+			name_id_l.lock();
+			id_name_l.lock();
 			active_users.erase(c);
 			name_id.erase(id_name[c]);
 			id_name.erase(c);
+			active_users_l.unlock();
+			name_id_l.unlock();
+			id_name_l.unlock();
 			// Close this connection; destroy thread
 			close(c);
 			return 0;
@@ -202,13 +245,18 @@ void* per_user(void* void_connfd)
 			string to(pch);
 			pch = strtok (NULL, " ");
 			string data(pch);
+			// Mutex lock
+			chat_l.lock();
 			chat.push(make_pair(name_id[to], data));
+			chat_l.unlock();
      	}
     	else if(!command.compare("/create_grp") && logged_in)
     	{
     		pch = strtok (NULL, " ");
     		string g_name(pch);
     		const char* commy;
+    		// Mutex lock
+    		groups_l.lock();
     		if(groups.find(g_name) == groups.end())
     		{
     			groups[g_name] = set<string>();
@@ -219,6 +267,7 @@ void* per_user(void* void_connfd)
     		{
     			commy = "Group already exists!";
     		}
+    		groups_l.unlock();
     		send_data(commy, connfd);
     	}
     	else if(!command.compare("/join_grp") && logged_in)
@@ -226,6 +275,8 @@ void* per_user(void* void_connfd)
     		pch = strtok (NULL, " ");
     		string g_name(pch);
     		const char* commy;
+    		// Mutex lock
+    		groups_l.lock();
     		if(groups.find(g_name) == groups.end())
     		{
     			commy = "Group doesn't exist!";
@@ -235,6 +286,7 @@ void* per_user(void* void_connfd)
     			commy = "Joined group!";
     			groups[g_name].insert(id_name[connfd]);
     		}
+    		groups_l.unlock();
     		send_data(commy, connfd);
 	    }	
     	else if(!command.compare("/msg_group") && logged_in)
@@ -243,20 +295,27 @@ void* per_user(void* void_connfd)
     		string g_name(pch);
     		pch = strtok (NULL, " ");
     		string message(pch);
+    		// Mutex lock
+    		groups_l.lock();
     		if(groups.find(g_name) == groups.end())
     		{
+    			groups_l.unlock();
     			const char* commy = "Group doesn't exist!";
     			send_data(commy, connfd);
     		}
     		// A sanity check; just in case client modifies their code before running it
     		else if(groups[g_name].find(id_name[connfd]) == groups[g_name].end())
     		{
+    			groups_l.unlock();
     			const char* commy = "You're not part of this group!";
     			send_data(commy, connfd);	
     		}
     		else
     		{
-    			for(set<string>::iterator it = groups[g_name].begin(); it != groups[g_name].end(); ++it)
+    			set<string> tempo = groups[g_name];
+    			groups_l.unlock();
+    			chat_grp_l.lock();
+    			for(set<string>::iterator it = tempo.begin(); it != tempo.end(); ++it)
     			{
     				// Message sent by user shouldn't coma back to them
     				if(name_id[*it] != connfd)
@@ -264,6 +323,7 @@ void* per_user(void* void_connfd)
     					chat_grp.push(make_pair(name_id[*it],make_pair(g_name, message)));	
     				}
     			}
+    			chat_grp_l.unlock();
     		}
     	}   
 	    else if(!command.compare("/send") && logged_in)
@@ -285,10 +345,13 @@ void* send_back(void* argv)
 	{
 		while(chat.size())
 		{
+			// Mutex lock
+			chat_l.lock();
 			x = chat.front();
 			chat.pop();
 			string formatted = "(" + id_name[x.first] + ") " + x.second;
 			send_data(formatted, x.first);
+			chat_l.unlock();
 		}	
 	}
 }
@@ -301,10 +364,13 @@ void* send_back_grp(void* argv)
 	{
 		while(chat_grp.size())
 		{
+			// Mutex lock
+			chat_grp_l.lock();
 			x = chat_grp.front();
 			chat_grp.pop();
 			string formatted = "(" + x.second.first + ") " + x.second.second;
 			send_data(formatted, x.first);
+			chat_grp_l.unlock();
 		}	
 	}	
 }

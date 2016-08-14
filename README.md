@@ -20,8 +20,9 @@ The following commands are supported :
 
 ### Server
 
-* Three threads work in parallel.
+* Four threads work in parallel.
 * One thread listens on the port assigned for registration of users.
+* One thread clears the outgoing message queue by sending data to respective group users.
 * One thread clears the outgoing message queue by sending data to respective users.
 * One thread creates a new thread (for communication) for every incoming request by the client. This thread is deleted once the client is done with their interaction with the server.
 

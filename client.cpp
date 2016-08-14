@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/sendfile.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <string.h>
@@ -219,7 +220,8 @@ int main(int argc, char *argv[])
 		}
 		else if(!command.compare("/send") && logged_in)
 		{	
-			
+			// FILE* fp = fopen("ohho","r");
+			// sendfile(irc_sock,fileno(fp),NULL,BUFFER_SIZE);	
 		}
 		else if(!command.compare("/recv") && logged_in)
 		{
