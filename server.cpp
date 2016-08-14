@@ -46,7 +46,6 @@ int send_data(string data, int sock)
 void* register_user(void* argv)
 {
 	// Read registered accounts from file
-	// fstream file((string)argv);
 	fstream file(USER_FILENAME, ios::in);
 	string line;
 	if (file.is_open())
@@ -191,31 +190,39 @@ void* per_user(void* void_connfd)
 		logged_in = is_logged_in(connfd);
 		if(!command.compare("/login"))
 		{
-			pch = strtok (NULL, " ");
-			string username(pch);
-			pch = strtok (NULL, " ");
-			string password(pch);
-			logged_in = valid_login(username, password);
 			const char* commy;
-			if(logged_in)
+			try
 			{
-				commy = "Signed in!"; 
-				// Mutex lock
-				name_id_l.lock();
-				id_name_l.lock();
-				active_users_l.lock(); 
-				name_id[username] = connfd;
-				id_name[connfd] = username;
-				active_users.insert(connfd);
-				name_id_l.unlock();
-				id_name_l.unlock();
-				active_users_l.unlock(); 
+				pch = strtok (NULL, " ");
+				string username(pch);
+				pch = strtok (NULL, " ");
+				string password(pch);
+				logged_in = valid_login(username, password);
+				if(logged_in)
+				{
+					commy = "Signed in!"; 
+					// Mutex lock
+					name_id_l.lock();
+					id_name_l.lock();
+					active_users_l.lock(); 
+					name_id[username] = connfd;
+					id_name[connfd] = username;
+					active_users.insert(connfd);
+					name_id_l.unlock();
+					id_name_l.unlock();
+					active_users_l.unlock(); 
+				}
+				else
+				{
+		        	commy = "Error signing in!";
+				}
+				send_data(commy, connfd);
 			}
-			else
+			catch(...)
 			{
-	        	commy = "Error signing in!";
+				commy = "Malformed message!";
+				send_data(commy, connfd);
 			}
-			send_data(commy, connfd);
 		}
 		else if(!command.compare("/who") && logged_in)
 		{
@@ -241,89 +248,120 @@ void* per_user(void* void_connfd)
      	}
      	else if(!command.compare("/msg") && logged_in)
      	{
-     		pch = strtok (NULL, " ");
-			string to(pch);
-			pch = strtok (NULL, " ");
-			string data(pch);
-			// Mutex lock
-			chat_l.lock();
-			chat.push(make_pair(name_id[to], data));
-			chat_l.unlock();
+     		const char* commy;
+     		try
+     		{
+     			pch = strtok (NULL, " ");
+				string to(pch);
+				pch = strtok (NULL, " ");
+				string data(pch);
+				// Mutex lock
+				chat_l.lock();
+				chat.push(make_pair(name_id[to], data));
+				chat_l.unlock();
+			}
+			catch(...)
+			{
+				commy = "Malformed message!";
+				send_data(commy, connfd);
+			}
      	}
     	else if(!command.compare("/create_grp") && logged_in)
     	{
-    		pch = strtok (NULL, " ");
-    		string g_name(pch);
     		const char* commy;
-    		// Mutex lock
-    		groups_l.lock();
-    		if(groups.find(g_name) == groups.end())
-    		{
-    			groups[g_name] = set<string>();
-    			groups[g_name].insert(id_name[connfd]);
-    			commy = "Group created!";
+    		try{
+    			pch = strtok (NULL, " ");
+    			string g_name(pch);
+    			// Mutex lock
+    			groups_l.lock();
+    			if(groups.find(g_name) == groups.end())
+    			{
+	    			groups[g_name] = set<string>();
+    				groups[g_name].insert(id_name[connfd]);
+    				commy = "Group created!";
+    			}
+    			else
+    			{
+	    			commy = "Group already exists!";
+    			}
+    			groups_l.unlock();
+    			send_data(commy, connfd);
     		}
-    		else
+    		catch(...)
     		{
-    			commy = "Group already exists!";
+    			commy = "Malformed message!";
+				send_data(commy, connfd);
     		}
-    		groups_l.unlock();
-    		send_data(commy, connfd);
     	}
     	else if(!command.compare("/join_grp") && logged_in)
     	{
-    		pch = strtok (NULL, " ");
-    		string g_name(pch);
     		const char* commy;
-    		// Mutex lock
-    		groups_l.lock();
-    		if(groups.find(g_name) == groups.end())
-    		{
-    			commy = "Group doesn't exist!";
+    		try{
+    			pch = strtok (NULL, " ");
+    			string g_name(pch);
+    			// Mutex lock
+    			groups_l.lock();
+    			if(groups.find(g_name) == groups.end())
+    			{
+	    			commy = "Group doesn't exist!";
+    			}
+    			else
+    			{
+	    			commy = "Joined group!";
+    				groups[g_name].insert(id_name[connfd]);
+    			}
+    			groups_l.unlock();
+    			send_data(commy, connfd);
     		}
-    		else
+    		catch(...)
     		{
-    			commy = "Joined group!";
-    			groups[g_name].insert(id_name[connfd]);
+    			commy = "Malformed message!";
+				send_data(commy, connfd);
     		}
-    		groups_l.unlock();
-    		send_data(commy, connfd);
 	    }	
     	else if(!command.compare("/msg_group") && logged_in)
 	    {
-	    	pch = strtok (NULL, " ");
-    		string g_name(pch);
-    		pch = strtok (NULL, " ");
-    		string message(pch);
-    		// Mutex lock
-    		groups_l.lock();
-    		if(groups.find(g_name) == groups.end())
-    		{
-    			groups_l.unlock();
-    			const char* commy = "Group doesn't exist!";
-    			send_data(commy, connfd);
-    		}
-    		// A sanity check; just in case client modifies their code before running it
-    		else if(groups[g_name].find(id_name[connfd]) == groups[g_name].end())
-    		{
-    			groups_l.unlock();
-    			const char* commy = "You're not part of this group!";
-    			send_data(commy, connfd);	
-    		}
-    		else
-    		{
-    			set<string> tempo = groups[g_name];
-    			groups_l.unlock();
-    			chat_grp_l.lock();
-    			for(set<string>::iterator it = tempo.begin(); it != tempo.end(); ++it)
+	    	const char* commy;
+	    	try{
+	    		pch = strtok (NULL, " ");
+    			string g_name(pch);
+    			pch = strtok (NULL, " ");
+    			string message(pch);
+    			// Mutex lock
+    			groups_l.lock();
+    			if(groups.find(g_name) == groups.end())
     			{
-    				// Message sent by user shouldn't coma back to them
-    				if(name_id[*it] != connfd)
-    				{
-    					chat_grp.push(make_pair(name_id[*it],make_pair(g_name, message)));	
-    				}
+    				groups_l.unlock();
+    				commy = "Group doesn't exist!";
+    				send_data(commy, connfd);
     			}
-    			chat_grp_l.unlock();
+    			// A sanity check; just in case client modifies their code before running it
+    			else if(groups[g_name].find(id_name[connfd]) == groups[g_name].end())
+    			{
+    				groups_l.unlock();
+    				commy = "You're not part of this group!";
+    				send_data(commy, connfd);	
+    			}
+    			else
+    			{
+    				set<string> tempo = groups[g_name];
+    				groups_l.unlock();
+    				chat_grp_l.lock();
+    				for(set<string>::iterator it = tempo.begin(); it != tempo.end(); ++it)
+    				{
+    					// Message sent by user shouldn't coma back to them
+    					if(name_id[*it] != connfd)
+    					{
+    						chat_grp.push(make_pair(name_id[*it],make_pair(g_name, message)));	
+    					}
+    				}
+    				chat_grp_l.unlock();
+    			}
+    		}
+    		catch(...)
+    		{
+    			commy = "Malformed message!";
+				send_data(commy, connfd);
     		}
     	}   
 	    else if(!command.compare("/send") && logged_in)
@@ -386,7 +424,8 @@ int main()
     // Thread to handle out-going group messages
     pthread_create(&pot3, NULL, send_back_grp, NULL);
     // Main thread
-    int logged_in = 0, listenfd = 0, connfd = 0;
+    int listenfd = 0;
+    long connfd = 0;
     sockaddr_in serv_addr; 
     listenfd = socket(AF_INET, SOCK_STREAM, 0);
     memset(&serv_addr, '0', sizeof(serv_addr)); 
