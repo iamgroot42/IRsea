@@ -12,9 +12,9 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-#define REGISTER_PORT 5004
-#define IRC_PORT 5005
-#define BUFFER_SIZE 512
+#define REGISTER_PORT 5004 //Port for registrations
+#define IRC_PORT 5005 //Port for normal communication
+#define BUFFER_SIZE 512 //Maximum size per message
 
 using namespace std;
 // Indicator variables for status of server connection, login status

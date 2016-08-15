@@ -9,10 +9,10 @@
 #include <sys/sendfile.h>
 #include <arpa/inet.h> 
 
-#define REGISTER_PORT 5004
-#define IRC_PORT 5005
-#define BUFFER_SIZE 512
-#define USER_FILENAME "users"
+#define REGISTER_PORT 5004 //Port for registrations
+#define IRC_PORT 5005 //Port for normal communication
+#define BUFFER_SIZE 512 //Maximum size per message
+#define USER_FILENAME "users" //Filename containing username & passwords
 
 using namespace std;
 
@@ -31,10 +31,10 @@ queue< pair<int, pair<string,string> > > chat_grp;
 map< string, set<string> > groups;
 // A one-many mapping of users and files waiting for them
 multimap<string, string> waiting_files;
-// Thread-safe counter for files
+// Counter for files
 int file_counter = 1;
 // Mutex locks for all shared variables
-mutex name_id_l, id_name_l, active_users_l, username_password_l, chat_l, chat_grp_l, groups_l, waiting_files_l, file_counter_l;
+mutex name_id_l, id_name_l, active_users_l, username_password_l, chat_l, chat_grp_l,groups_l, waiting_files_l, file_counter_l;
 
 // Send data back to the client
 int send_data(string data, int sock)
@@ -47,13 +47,11 @@ int send_data(string data, int sock)
     return 1;
 }
 
-// Thread to listen to register users
-void* register_user(void* argv){
-	// Read registered accounts from file
+// Read registered accounts from file
+void populate_userlist(){
 	fstream file(USER_FILENAME, ios::in);
 	string line;
 	if (file.is_open()){
-  		username_password_l.lock();
 	    while(getline(file,line)){
       		char* pch = strtok(strdup(line.c_str()), " ");
       		string username(pch);
@@ -61,13 +59,19 @@ void* register_user(void* argv){
       		string password(pch);
       		username_password[username] = password;
     	}
-    	username_password_l.unlock();
     	file.close();
-    	file.open(USER_FILENAME, ios::app);
   	}
   	else{
   		cout<<"LOG : users' file not created yet.\n";
   	}
+}
+
+// Thread to listen to register users
+void* register_user(void* argv){
+	// Populate username_password
+	populate_userlist();
+	// Open file for writing username-password pairs
+	fstream file(USER_FILENAME, ios::app);
     // Socket creation snippet
 	char buffer[BUFFER_SIZE];
     string confirm = "Registered!";
@@ -149,6 +153,22 @@ string online_users(){
 	return ret_val.substr(0, ret_val.size()-1);
 }
 
+// Client ended connection; remove everything associated with them
+void remove_user(int c){
+	// Mutex lock
+	active_users_l.lock();
+	name_id_l.lock();
+	id_name_l.lock();
+	active_users.erase(c);
+	name_id.erase(id_name[c]);
+	id_name.erase(c);
+	active_users_l.unlock();
+	name_id_l.unlock();
+	id_name_l.unlock();
+	// Close this connection
+	close(c);
+}
+
 // A thread spawned per connection, to handle all incoming requests from there
 void* per_user(void* void_connfd){
     string current_username;
@@ -158,22 +178,9 @@ void* per_user(void* void_connfd){
     while(1){
     	memset(buffer,'0',sizeof(buffer));
 		ohho = read(connfd,buffer,sizeof(buffer));
-		// Client ended connection.. close it
 		if(!ohho){
-			int c = connfd;
-			// Mutex lock
-			active_users_l.lock();
-			name_id_l.lock();
-			id_name_l.lock();
-			active_users.erase(c);
-			name_id.erase(id_name[c]);
-			id_name.erase(c);
-			active_users_l.unlock();
-			name_id_l.unlock();
-			id_name_l.unlock();
-			// Close this connection; destroy thread
-			close(c);
-			return 0;
+			remove_user(connfd); // Remove active-user
+			return 0; //End thread
 		}
 		buffer[ohho] = 0;
 		cout<<"LOG : "<<buffer<<endl;
@@ -182,7 +189,6 @@ void* per_user(void* void_connfd){
 		string command(pch);
 		logged_in = is_logged_in(connfd);
 		if(!command.compare("/login")){
-			const char* commy;
 			try{
 				pch = strtok (NULL, " ");
 				string username(pch);
@@ -190,7 +196,7 @@ void* per_user(void* void_connfd){
 				string password(pch);
 				logged_in = valid_login(username, password);
 				if(logged_in){
-					commy = "Signed in!"; 
+					send_data("Signed in!", connfd);
 					// Mutex lock
 					name_id_l.lock();
 					id_name_l.lock();
@@ -199,44 +205,27 @@ void* per_user(void* void_connfd){
                     current_username = username;
 					name_id[username] = connfd;
 					id_name[connfd] = username;
-                    // Update list of active users
-					active_users.insert(connfd);
+					active_users.insert(connfd); // Update list of active users
 					name_id_l.unlock();
 					id_name_l.unlock();
 					active_users_l.unlock(); 
 				}
 				else{
-		        	commy = "Error signing in!";
+					send_data("Error signing in!", connfd);
 				}
-				send_data(commy, connfd);
 			}
 			catch(...){
-				commy = "Malformed message!";
-				send_data(commy, connfd);
+				send_data("Malformed message!", connfd);
 			}
 		}
 		else if(!command.compare("/who") && logged_in){
-        	const char* commy = online_users().c_str();
-        	send_data(commy, connfd);
+        	send_data(online_users().c_str(), connfd);
      	}
      	else if(!command.compare("/exit") && logged_in){
-			int c = connfd;
-			// Mutex lock
-			active_users_l.lock();
-			name_id_l.lock();
-			id_name_l.lock();
-			active_users.erase(c);
-			name_id.erase(id_name[c]);
-			id_name.erase(c);
-			active_users_l.unlock();
-			name_id_l.unlock();
-			id_name_l.unlock();
-			// Close this connection; destroy thread
-			close(c);
-			return 0;
+			remove_user(connfd); // Remove active-user
+			return 0; //End thread;
      	}
      	else if(!command.compare("/msg") && logged_in){
-     		const char* commy;
      		try{
      			pch = strtok (NULL, " ");
 				string to(pch);
@@ -245,18 +234,15 @@ void* per_user(void* void_connfd){
 				// Mutex lock
 				chat_l.lock();
                 name_id_l.lock();
-                // Push outgoing message to queue, to be handled by another process
-				chat.push(make_pair(name_id[to], data));
+				chat.push(make_pair(name_id[to], data)); // Push outgoing message to queue
                 name_id_l.unlock();
                 chat_l.unlock();
 			}
 			catch(...){
-				commy = "Malformed message!";
-				send_data(commy, connfd);
+				send_data("Malformed message!", connfd);
 			}
      	}
     	else if(!command.compare("/create_grp") && logged_in){
-    		const char* commy;
     		try{
     			pch = strtok (NULL, " ");
     			string g_name(pch);
@@ -266,21 +252,18 @@ void* per_user(void* void_connfd){
     			if(groups.find(g_name) == groups.end()){
 	    			groups[g_name] = set<string>();
     				groups[g_name].insert(current_username);
-    				commy = "Group created!";
+    				send_data("Group created!", connfd);
     			}
     			else{
-	    			commy = "Group already exists!";
+	    			send_data("Group already exists!", connfd);
     			}
     			groups_l.unlock();
-    			send_data(commy, connfd);
     		}
     		catch(...){
-    			commy = "Malformed message!";
-				send_data(commy, connfd);
+				send_data("Malformed message!", connfd);
     		}
     	}
     	else if(!command.compare("/join_grp") && logged_in){
-    		const char* commy;
     		try{
     			pch = strtok (NULL, " ");
     			string g_name(pch);
@@ -288,22 +271,19 @@ void* per_user(void* void_connfd){
     			groups_l.lock();
                 // Check whether group name exists
     			if(groups.find(g_name) == groups.end()){
-	    			commy = "Group doesn't exist!";
+	    			send_data("Group doesn't exist!", connfd);
     			}
     			else{
-	    			commy = "Joined group!";
+	    			send_data("Joined group!", connfd);
     				groups[g_name].insert(current_username);
     			}
     			groups_l.unlock();
-    			send_data(commy, connfd);
     		}
     		catch(...){
-    			commy = "Malformed message!";
-				send_data(commy, connfd);
+				send_data("Malformed message!", connfd);
     		}
 	    }	
     	else if(!command.compare("/msg_group") && logged_in){
-	    	const char* commy;
 	    	try{
 	    		pch = strtok (NULL, " ");
     			string g_name(pch);
@@ -313,14 +293,12 @@ void* per_user(void* void_connfd){
     			groups_l.lock();
     			if(groups.find(g_name) == groups.end()){
     				groups_l.unlock();
-    				commy = "Group doesn't exist!";
-    				send_data(commy, connfd);
+    				send_data("Group doesn't exist!", connfd);
     			}
     			// A sanity check; just in case client modifies their code before running it
     			else if(groups[g_name].find(current_username) == groups[g_name].end()){
     				groups_l.unlock();
-    				commy = "You're not part of this group!";
-    				send_data(commy, connfd);	
+    				send_data("You're not part of this group!", connfd);	
     			}
     			else{
     				set<string> tempo = groups[g_name];
@@ -339,8 +317,7 @@ void* per_user(void* void_connfd){
     			}
     		}
     		catch(...){
-    			commy = "Malformed message!";
-				send_data(commy, connfd);
+				send_data("Malformed message!", connfd);
     		}
     	}   
 	    else if(!command.compare("/send") && logged_in){   
@@ -352,13 +329,12 @@ void* per_user(void* void_connfd){
             int temp = file_counter++;
             // Check whether user with this name exists
             if(name_id.find(to_name) == name_id.end()){
-                const char* commy = "No user by this name exists!";
-                send_data(commy, connfd);
+                send_data("No user by this name exists!", connfd);
                 name_id_l.unlock();
                 file_counter_l.unlock();
             }
             else{
-                // Receive and store file into server storage, ready for retreival by targeted user
+                // Receive and store file into server storage, ready for retrieval by targeted user
                 name_id_l.unlock();
                 file_counter_l.unlock();
                 string file_counter_string("temp_data/" + to_string(temp));
@@ -374,6 +350,7 @@ void* per_user(void* void_connfd){
                 waiting_files_l.lock();
                 waiting_files.insert(make_pair(to_name, file_counter_string));
                 waiting_files_l.unlock();
+                send_data("File received!", connfd);
                 fclose(fp);
             }
     	}
@@ -383,16 +360,14 @@ void* per_user(void* void_connfd){
             multimap<string,string>::iterator it = waiting_files.find(current_username);
             // Check if user has any pending files ready for them
             if(it != waiting_files.end()){
+            	waiting_files.erase(it);
                 waiting_files_l.unlock();
-                string fname = (*it).second;
-                FILE* fp = fopen(fname.c_str(),"r");
-                // Comunicate start of file transfer
-                send_data(command.c_str(), connfd);
-                // Send file
+                const char* fname = ((*it).second).c_str();
+                FILE* fp = fopen(fname,"r");
+                send_data(command.c_str(), connfd); // Comunicate start of file transfer
                 int wth;
-                while((wth = sendfile(connfd,fileno(fp),NULL,BUFFER_SIZE)) == BUFFER_SIZE);
-                // Remove file from server storage
-                // remove(fname);
+                while((wth = sendfile(connfd,fileno(fp),NULL,BUFFER_SIZE)) == BUFFER_SIZE); //Send file
+                remove(fname); // Remove file from server storage
             }
             else{
                 waiting_files_l.unlock();
