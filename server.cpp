@@ -320,38 +320,46 @@ void* per_user(void* void_connfd){
 				send_data("Malformed message!", connfd);
     		}
     	}   
-	    else if(!command.compare("/send") && logged_in){   
+	    else if(!command.compare("/send") && logged_in){ 
+	    	bool keep_file = true;  
             pch = strtok(NULL, " ");
             string to_name(pch);
             // Mutex lock
             file_counter_l.lock();
-            name_id_l.lock();
+            username_password_l.lock();
             int temp = file_counter++;
+			file_counter_l.unlock();
             // Check whether user with this name exists
-            if(name_id.find(to_name) == name_id.end()){
-                send_data("No user by this name exists!", connfd);
-                name_id_l.unlock();
-                file_counter_l.unlock();
+            if(username_password.find(to_name) == username_password.end()){
+                keep_file = false;
+            }
+			username_password_l.unlock();
+			// Receive and store file into server storage, ready for retrieval by targeted user
+			string file_counter_string("temp_data/" + to_string(temp));
+			FILE* fp = fopen(file_counter_string.c_str(),"w");
+			memset(buffer,'0',sizeof(buffer));
+			while((ohho = read(connfd,buffer,sizeof(buffer))) > 0){
+				buffer[ohho] = 0;
+				fwrite(buffer , 1 , ohho ,fp);
+				fflush(fp);
+				// Buffer ended; stop receiving
+				if(ohho < BUFFER_SIZE){
+					break;
+				}
+				memset(buffer,'0',sizeof(buffer));
+			}
+			// Mutex lock
+			waiting_files_l.lock();
+			waiting_files.insert(make_pair(to_name, file_counter_string));
+			waiting_files_l.unlock();
+			fclose(fp);
+			// Delete file if it was meant for a user who's not registered yet
+            if(!keep_file){
+            	send_data("User with this username doesn't exist!", connfd);
+            	remove(file_counter_string.c_str());
             }
             else{
-                // Receive and store file into server storage, ready for retrieval by targeted user
-                name_id_l.unlock();
-                file_counter_l.unlock();
-                string file_counter_string("temp_data/" + to_string(temp));
-                FILE* fp = fopen(file_counter_string.c_str(),"w");
-                memset(buffer,'0',sizeof(buffer));
-                while((ohho = read(connfd,buffer,sizeof(buffer))) == BUFFER_SIZE){
-                    buffer[ohho] = 0;
-                    fwrite(buffer , 1 , sizeof(buffer) ,fp);
-                    fflush(fp);
-                    memset(buffer,'0',sizeof(buffer));
-                }
-                // Mutex lock
-                waiting_files_l.lock();
-                waiting_files.insert(make_pair(to_name, file_counter_string));
-                waiting_files_l.unlock();
-                send_data("File received!", connfd);
-                fclose(fp);
+				send_data("File received!", connfd);
             }
     	}
     	else if(!command.compare("/recv") && logged_in){

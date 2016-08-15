@@ -53,10 +53,14 @@ void* server_feedback(void* void_listenfd){
 		if(!strcmp("/recv",buffer)){
 			FILE* fp = fopen("file_from_server","w");
 			memset(buffer,'0',sizeof(buffer));
-			while((ohho = read(listenfd,buffer,sizeof(buffer))) == BUFFER_SIZE){
+			while((ohho = read(listenfd,buffer,sizeof(buffer))) > 0){
 				buffer[ohho] = 0;
-				fwrite(buffer , 1 , sizeof(buffer) ,fp);
+				fwrite(buffer , 1 , ohho ,fp);
 				fflush(fp);
+				// Buffer ended; stop receiving
+				if(ohho < BUFFER_SIZE){
+					break;
+				}
 				memset(buffer,'0',sizeof(buffer));
 			}
 			cout<<">> File received!"<<endl;	
@@ -214,7 +218,7 @@ int main(int argc, char *argv[]){
 				while((wth = sendfile(irc_sock,fileno(fp),NULL,BUFFER_SIZE)) == BUFFER_SIZE);
 			}
 			catch(...){
-				cout<<">> Error opening file. Please sepcify correct path!\n";
+				cout<<">> Error opening file. Please specify correct path!\n";
 				continue;
 			}
 		}
