@@ -167,8 +167,7 @@ int main(int argc, char *argv[]){
 		}
 		else if(!command.compare("/msg") && logged_in){
 			cin>>username;
-			// getline(cin, password);
-			cin>>password;
+			getline(cin, password);
 			send = command + " " + username + " " + password;
 			if(!send_data(send, irc_sock)){
 				cout<<">> Error communicating with server. Please try again.\n";
@@ -192,8 +191,7 @@ int main(int argc, char *argv[]){
 			}
 		}
 		else if(!command.compare("/msg_group") && logged_in){
-			// getline(cin, password);
-			cin>>password;
+			getline(cin, password);
 			if(current_group == ""){
 				cout<<">> Join a group before you can send messages.\n";
 			}
@@ -212,10 +210,13 @@ int main(int argc, char *argv[]){
 				FILE* fp = fopen(password.c_str(),"r");
 				if(!send_data(send, irc_sock)){
 					cout<<">> Error communicating with server. Please try again.\n";
+					int wth;
+					// Send data to server
+					while((wth = sendfile(irc_sock,fileno(fp),NULL,BUFFER_SIZE)) == BUFFER_SIZE);
 				}
-				int wth;
-				// Send data to server
-				while((wth = sendfile(irc_sock,fileno(fp),NULL,BUFFER_SIZE)) == BUFFER_SIZE);
+				else{
+					cout<<">> Error opening file. Please specify correct path!\n";
+				}
 			}
 			catch(...){
 				cout<<">> Error opening file. Please specify correct path!\n";

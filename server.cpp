@@ -178,6 +178,9 @@ void* per_user(void* void_connfd){
     while(1){
     	memset(buffer,'0',sizeof(buffer));
 		ohho = read(connfd,buffer,sizeof(buffer));
+    	cout<<"Sizeof : "<<sizeof(buffer)<<endl;
+    	cout<<"Length : "<<strlen(buffer)<<endl;
+    	cout<<"Ending : "<<ohho<<endl;
 		if(!ohho){
 			remove_user(connfd); // Remove active-user
 			return 0; //End thread
@@ -229,7 +232,7 @@ void* per_user(void* void_connfd){
      		try{
      			pch = strtok (NULL, " ");
 				string to(pch);
-				pch = strtok (NULL, " ");
+				pch = strtok (NULL, "");
 				string data(pch);
 				// Mutex lock
 				chat_l.lock();
@@ -326,14 +329,14 @@ void* per_user(void* void_connfd){
             string to_name(pch);
             // Mutex lock
             file_counter_l.lock();
-            username_password_l.lock();
             int temp = file_counter++;
 			file_counter_l.unlock();
             // Check whether user with this name exists
-            if(username_password.find(to_name) == username_password.end()){
+            name_id_l.lock();
+            if(!is_logged_in(name_id[to_name])){
                 keep_file = false;
             }
-			username_password_l.unlock();
+            name_id_l.unlock();
 			// Receive and store file into server storage, ready for retrieval by targeted user
 			string file_counter_string("temp_data/" + to_string(temp));
 			FILE* fp = fopen(file_counter_string.c_str(),"w");
@@ -353,9 +356,9 @@ void* per_user(void* void_connfd){
 			waiting_files.insert(make_pair(to_name, file_counter_string));
 			waiting_files_l.unlock();
 			fclose(fp);
-			// Delete file if it was meant for a user who's not registered yet
+			// Delete file if it was meant for a user who's not online/registered
             if(!keep_file){
-            	send_data("User with this username doesn't exist!", connfd);
+            	send_data("User with this username doesn't exist/isn't online!", connfd);
             	remove(file_counter_string.c_str());
             }
             else{
