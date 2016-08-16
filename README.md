@@ -37,6 +37,7 @@ The following commands are supported :
 * To run the server, run:  ` make`. Then, run it as `./server` (from server folder).
 * To run a client, run:  ` make`. Then, run it as `./client <SERVER ADDRESS>` (from client folder)
 * If you don't  mind concurrency bugs, run:  ` make`. Then, run it as `./server` (from server(no_locks) folder).
+* Run `make clean` to remove compiled programs.
 
 
 ## Specifics
