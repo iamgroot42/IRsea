@@ -39,7 +39,7 @@ void* server_feedback(void* void_listenfd){
 		ohho = read(listenfd,buffer,sizeof(buffer));
 		// If server shuts down/terminates connection
 		if(!ohho){
-			cout<<">> Connection with server terminated!\n";
+			cout<<">> Connection with server terminated!"<<endl;
 			server_down = true;
 			close(listenfd);
 			return 0;
@@ -78,18 +78,18 @@ int create_socket_and_connect(char* address, int port){
 	int sock = 0;
 	struct sockaddr_in serv_addr;
 	if((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-        cerr<<">> Socket creation error \n";
+        cerr<<">> Socket creation error"<<endl;
         return 0;
     } 
 	memset(&serv_addr, '0', sizeof(serv_addr)); 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(port); 
     if(inet_pton(AF_INET, address, &serv_addr.sin_addr)<=0){
-        cerr<<">> Invalid address\n";
+        cerr<<">> Invalid address"<<endl;
         return 0;
     } 
     if( connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
-        cerr<<">> Connection Failed\n";
+        cerr<<">> Connection Failed"<<endl;
         return 0;
     }
     return sock;
@@ -99,7 +99,7 @@ int create_socket_and_connect(char* address, int port){
 int main(int argc, char *argv[]){
 	// Argument: IP address of server
 	if(argc<2){
-		cout<<"Usage: "<<argv[0]<<" <server ip>\n";
+		cout<<"Usage: "<<argv[0]<<" <server ip>"<<endl;
 		return 0;
 	}
 	// Establish connection
@@ -115,7 +115,7 @@ int main(int argc, char *argv[]){
 	string send, username, password, command, current_group;
 	// Current group joined by client, if any
 	current_group = "";
-	cout<<">> Welcome to IRsea!\n";
+	cout<<">> Welcome to IRsea!"<<endl;
 	while(1){
 		// Kill main thread if server is down.
 		if(server_down){
@@ -127,7 +127,7 @@ int main(int argc, char *argv[]){
 			bool kill = true;
 			if(logged_in){
 				if(!send_data(command ,irc_sock)){
-					cout<<">> Error logging out. Please try again.\n";
+					cout<<">> Error logging out. Please try again."<<endl;
 					kill = false;
 				}
 			}
@@ -136,7 +136,7 @@ int main(int argc, char *argv[]){
 				pthread_kill(pot,0);
 				close(irc_sock);
 				close(register_sock);
-				cout<<">> Exiting!\nThanks for using IRsea!\n";
+				cout<<">> Exiting!\nThanks for using IRsea!"<<endl;
 				return 0;
 			}
 		}
@@ -145,24 +145,26 @@ int main(int argc, char *argv[]){
 			cin>>password;
 			send = username + " " + password;
 			if(!send_data(send, register_sock)){
-				cout<<">> Error in registration. Please try again.\n";
+				cout<<">> Error in registration. Please try again."<<endl;
 			}
 		}
 		else if(!command.compare("/login")){	
 			cin>>username;
 			cin>>password;
-			send = "/login " + username + " " + password;
-			if(!send_data(send, irc_sock)){
-				cout<<">> Error logging-in. Please try again.\n";
+			if(logged_in){
+				cout<<">> Already logged in!"<<endl;
 			}
 			else{
-				logged_in = true;
+				send = "/login " + username + " " + password;
+				if(!send_data(send, irc_sock)){
+					cout<<">> Error logging-in. Please try again."<<endl;
+				}
 			}
 		}
 		else if(!command.compare("/who") && logged_in){
 			send = command + " " +  username + " " + password;
 			if(!send_data(send, irc_sock)){
-				cout<<">> Error communicating with server. Please try again.\n";
+				cout<<">> Error communicating with server. Please try again."<<endl;
 			}
 		}
 		else if(!command.compare("/msg") && logged_in){
@@ -170,21 +172,21 @@ int main(int argc, char *argv[]){
 			getline(cin, password);
 			send = command + " " + username + " " + password;
 			if(!send_data(send, irc_sock)){
-				cout<<">> Error communicating with server. Please try again.\n";
+				cout<<">> Error communicating with server. Please try again."<<endl;
 			}
 		}
 		else if(!command.compare("/create_grp") && logged_in){
 			cin>>username;
 			send = command + " " + username;
 			if(!send_data(send, irc_sock)){
-				cout<<">> Error communicating with server. Please try again.\n";
+				cout<<">> Error communicating with server. Please try again."<<endl;
 			}
 		}
 		else if(!command.compare("/join_grp") && logged_in){
 			cin>>username;
 			send = command + " " + username;
 			if(!send_data(send, irc_sock)){
-				cout<<">> Error communicating with server. Please try again.\n";
+				cout<<">> Error communicating with server. Please try again."<<endl;
 			}
 			else{
 				current_group = username;
@@ -193,12 +195,12 @@ int main(int argc, char *argv[]){
 		else if(!command.compare("/msg_group") && logged_in){
 			getline(cin, password);
 			if(current_group == ""){
-				cout<<">> Join a group before you can send messages.\n";
+				cout<<">> Join a group before you can send messages."<<endl;
 			}
 			else{
 				send = command + " " + current_group + " " + password;
 				if(!send_data(send, irc_sock)){
-					cout<<">> Error communicating with server. Please try again.\n";
+					cout<<">> Error communicating with server. Please try again."<<endl;
 				}
 			}
 		}
@@ -206,37 +208,41 @@ int main(int argc, char *argv[]){
 			cin>>username>>password;
 			try{
 				send = command + " " + username;
-				// Open file 
-				FILE* fp = fopen(password.c_str(),"r");
 				if(!send_data(send, irc_sock)){
-					cout<<">> Error communicating with server. Please try again.\n";
-					int wth;
-					// Send data to server
-					while((wth = sendfile(irc_sock,fileno(fp),NULL,BUFFER_SIZE)) == BUFFER_SIZE);
+					cout<<">> Error communicating with server. Please try again."<<endl;
 				}
 				else{
-					cout<<">> Error opening file. Please specify correct path!\n";
+					// Open file 
+					FILE* fp = fopen(password.c_str(),"r");
+					if(fp == NULL){
+						cout<<">> Error opening file. Please specify correct path!"<<endl;
+					}
+					else{
+						int wth;
+						// Send data to server
+						while((wth = sendfile(irc_sock,fileno(fp),NULL,BUFFER_SIZE)) == BUFFER_SIZE);
+					}
 				}
 			}
 			catch(...){
-				cout<<">> Error opening file. Please specify correct path!\n";
+				cout<<">> Error opening file. Please specify correct path!"<<endl;
 				continue;
 			}
 		}
 		else if(!command.compare("/recv") && logged_in){
 			// Request server to download any pending file
 			if(!send_data(command, irc_sock)){
-				cout<<">> Error communicating with server. Please try again.\n";
+				cout<<">> Error communicating with server. Please try again."<<endl;
 			}
 		}
 		else{
 			// Invalid command(s)
 			if(logged_in){
-				cout<<">> Invalid command! Please read the README for the list of supported commands\n";
+				cout<<">> Invalid command! Please read the README for the list of supported commands"<<endl;
 			}
 			// Not logged in
 			else{
-				cout<<">> Not signed in!\n";	
+				cout<<">> Not signed in!"<<endl;	
 			}
 		}
 	}

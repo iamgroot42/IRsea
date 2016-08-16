@@ -63,7 +63,7 @@ void populate_userlist(){
     	file.close();
   	}
   	else{
-  		cout<<"LOG : users' file not created yet.\n";
+  		cout<<"LOG : users' file not created yet."<<endl;
   	}
 }
 
@@ -120,6 +120,13 @@ int valid_login(string username, string password){
     if(username_password.find(username) != username_password.end()){
         if(password.compare(username_password[username]) == 0){
             username_password_l.unlock();
+            name_id_l.lock();
+            // Check if same user is logged in somewhere else or not
+            if(name_id.find(username) != name_id.end()){
+                name_id_l.unlock();
+                return 0;
+            }
+            name_id_l.unlock();
             return 1;
         }
         else{
@@ -181,9 +188,6 @@ void* per_user(void* void_connfd){
     while(1){
     	memset(buffer,'0',sizeof(buffer));
 		ohho = read(connfd,buffer,sizeof(buffer));
-    	cout<<"Sizeof : "<<sizeof(buffer)<<endl;
-    	cout<<"Length : "<<strlen(buffer)<<endl;
-    	cout<<"Ending : "<<ohho<<endl;
 		if(!ohho){
 			remove_user(connfd); // Remove active-user
 			return 0; //End thread
@@ -296,7 +300,7 @@ void* per_user(void* void_connfd){
 	    	try{
 	    		pch = strtok_r (NULL, " ", &STRTOK_SHARED);
     			string g_name(pch);
-    			pch = strtok_r (NULL, " ", &STRTOK_SHARED);
+    			pch = strtok_r (NULL, "", &STRTOK_SHARED);
     			string message(pch);
     			// Mutex lock
     			groups_l.lock();
@@ -368,7 +372,7 @@ void* per_user(void* void_connfd){
             	remove(file_counter_string.c_str());
             }
             else{
-				send_data("File received!", connfd);
+				send_data("File sent to server!", connfd);
             }
     	}
     	else if(!command.compare("/recv") && logged_in){
@@ -420,7 +424,7 @@ void* send_back_grp(void* argv){
 			chat_grp_l.lock();
 			x = chat_grp.front();
 			chat_grp.pop();
-			string formatted = "(" + x.second.first + ") " + x.second.second;
+			string formatted = "[" + x.second.first + "] " + x.second.second;
 			send_data(formatted, x.first);
 			chat_grp_l.unlock();
 		}	
