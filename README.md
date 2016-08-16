@@ -43,3 +43,4 @@ The following commands are supported :
 * Creating group (on the client's end) is not enough to send messages to that group; joining is required as well.
 * `/recv` will create a file by the name of 'file_from_server'. To receive more files (and avoid them overwriting this file), move the file to some other location after receiving it.
 * Files pushed to ther server are stored in the folder 'temp_data'.
+* strtok() is not thread safe (as standard implementation doesn't use TLS). Thus, strtok_r() has been used.

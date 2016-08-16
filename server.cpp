@@ -50,12 +50,13 @@ int send_data(string data, int sock)
 // Read registered accounts from file
 void populate_userlist(){
 	fstream file(USER_FILENAME, ios::in);
+	char* STRTOK_SHARED;
 	string line;
 	if (file.is_open()){
 	    while(getline(file,line)){
-      		char* pch = strtok(strdup(line.c_str()), " ");
+      		char* pch = strtok_r(strdup(line.c_str()), " ", &STRTOK_SHARED);
       		string username(pch);
-      		pch = strtok(NULL, " ");
+      		pch = strtok_r(NULL, " ", &STRTOK_SHARED);
       		string password(pch);
       		username_password[username] = password;
     	}
@@ -74,6 +75,7 @@ void* register_user(void* argv){
 	fstream file(USER_FILENAME, ios::app);
     // Socket creation snippet
 	char buffer[BUFFER_SIZE];
+	char* STRTOK_SHARED;
     string confirm = "Registered!";
 	int listenfd = 0, connfd = 0, ohho = 0;
 	sockaddr_in serv_addr; 
@@ -95,9 +97,9 @@ void* register_user(void* argv){
             }
             buffer[ohho] = 0;
             cout<<"LOG : /register "<<buffer<<endl;
-            pch = strtok(buffer," ");
+            pch = strtok_r(buffer," ", &STRTOK_SHARED);
             string username(pch);
-            pch = strtok (NULL, " ");
+            pch = strtok_r (NULL, " ", &STRTOK_SHARED);
             string password(pch);
             // Mutex lock
             username_password_l.lock();
@@ -175,6 +177,7 @@ void* per_user(void* void_connfd){
 	long connfd = (long)void_connfd;
 	int ohho = 0, logged_in = 0;
 	char buffer[BUFFER_SIZE];
+	char* STRTOK_SHARED;
     while(1){
     	memset(buffer,'0',sizeof(buffer));
 		ohho = read(connfd,buffer,sizeof(buffer));
@@ -188,14 +191,14 @@ void* per_user(void* void_connfd){
 		buffer[ohho] = 0;
 		cout<<"LOG : "<<buffer<<endl;
 		// Extract command type from incoming data
-		char *pch = strtok(buffer," ");
+		char *pch = strtok_r(buffer," ", &STRTOK_SHARED);
 		string command(pch);
 		logged_in = is_logged_in(connfd);
 		if(!command.compare("/login")){
 			try{
-				pch = strtok (NULL, " ");
+				pch = strtok_r (NULL, " ", &STRTOK_SHARED);
 				string username(pch);
-				pch = strtok (NULL, " ");
+				pch = strtok_r (NULL, " ", &STRTOK_SHARED);
 				string password(pch);
 				logged_in = valid_login(username, password);
 				if(logged_in){
@@ -230,13 +233,16 @@ void* per_user(void* void_connfd){
      	}
      	else if(!command.compare("/msg") && logged_in){
      		try{
-     			pch = strtok (NULL, " ");
+     			pch = strtok_r (NULL, " ", &STRTOK_SHARED);
 				string to(pch);
-				pch = strtok (NULL, "");
+				pch = strtok_r (NULL, "", &STRTOK_SHARED);
 				string data(pch);
 				// Mutex lock
 				chat_l.lock();
                 name_id_l.lock();
+				if (!is_logged_in(name_id[to])){
+					send_data("User is offline/doesn't exist!", connfd);
+				}
 				chat.push(make_pair(name_id[to], data)); // Push outgoing message to queue
                 name_id_l.unlock();
                 chat_l.unlock();
@@ -247,7 +253,7 @@ void* per_user(void* void_connfd){
      	}
     	else if(!command.compare("/create_grp") && logged_in){
     		try{
-    			pch = strtok (NULL, " ");
+    			pch = strtok_r (NULL, " ", &STRTOK_SHARED);
     			string g_name(pch);
     			// Mutex lock
     			groups_l.lock();
@@ -268,7 +274,7 @@ void* per_user(void* void_connfd){
     	}
     	else if(!command.compare("/join_grp") && logged_in){
     		try{
-    			pch = strtok (NULL, " ");
+    			pch = strtok_r (NULL, " ", &STRTOK_SHARED);
     			string g_name(pch);
     			// Mutex lock
     			groups_l.lock();
@@ -288,9 +294,9 @@ void* per_user(void* void_connfd){
 	    }	
     	else if(!command.compare("/msg_group") && logged_in){
 	    	try{
-	    		pch = strtok (NULL, " ");
+	    		pch = strtok_r (NULL, " ", &STRTOK_SHARED);
     			string g_name(pch);
-    			pch = strtok (NULL, " ");
+    			pch = strtok_r (NULL, " ", &STRTOK_SHARED);
     			string message(pch);
     			// Mutex lock
     			groups_l.lock();
@@ -325,7 +331,7 @@ void* per_user(void* void_connfd){
     	}   
 	    else if(!command.compare("/send") && logged_in){ 
 	    	bool keep_file = true;  
-            pch = strtok(NULL, " ");
+            pch = strtok_r(NULL, " ", &STRTOK_SHARED);
             string to_name(pch);
             // Mutex lock
             file_counter_l.lock();
