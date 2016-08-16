@@ -72,6 +72,7 @@ The following commands are supported :
 * User tries sending a file that doesn'r exist on their system.
 * Messages from people have username in brackets, messages from groups have group's name in square brackets.
 * Multiple files waiting for a person to receive (multiset is used in backend, so a person can have multiple pending files).
+* A message is sent to the reciepent whenever a file is sent for them by anyone.
 
 
 ### Example (for client)

@@ -218,8 +218,8 @@ int main(int argc, char *argv[]){
 						cout<<">> Error opening file. Please specify correct path!"<<endl;
 					}
 					else{
-						int wth;
 						// Send data to server
+						int wth;
 						while((wth = sendfile(irc_sock,fileno(fp),NULL,BUFFER_SIZE)) == BUFFER_SIZE);
 					}
 				}

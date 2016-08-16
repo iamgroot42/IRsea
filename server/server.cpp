@@ -372,6 +372,11 @@ void* per_user(void* void_connfd){
             	remove(file_counter_string.c_str());
             }
             else{
+            	string data = "File sent by " + to_name + ". Run /recv to receive it!";
+            	// Mutex lock
+            	name_id_l.lock();
+            	chat.push(make_pair(name_id[to_name], data)); // Push outgoing message to queue
+            	name_id_l.unlock();
 				send_data("File sent to server!", connfd);
             }
     	}

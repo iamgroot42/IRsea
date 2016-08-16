@@ -309,7 +309,9 @@ void* per_user(void* void_connfd){
             	remove(file_counter_string.c_str());
             }
             else{
-				send_data("File sent to server!", connfd);
+                string data = "File sent by " + to_name + ". Run /recv to receive it!";
+                chat.push(make_pair(name_id[to_name], data)); // Push outgoing message to queue
+                send_data("File sent to server!", connfd);
             }
     	}
     	else if(!command.compare("/recv") && logged_in){
