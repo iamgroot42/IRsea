@@ -84,7 +84,7 @@ The following commands are supported :
 >> hello
 random_user
 /msg random_user what's up?
->> (random_user)  what's up?
+>> (random_user)  nothing much
 /create_grp random
 >> Group created!
 /join_grp random
